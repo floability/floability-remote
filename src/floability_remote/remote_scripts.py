@@ -1,0 +1,282 @@
+"""Bash programs sent to the remote login node through standard input."""
+
+PROBE = r"""
+set -u
+
+env_name=$1
+requested_conda=$2
+
+find_conda() {
+    if [ -n "$requested_conda" ] && [ -x "$requested_conda" ]; then
+        printf '%s\n' "$requested_conda"
+        return
+    fi
+
+    if command -v conda >/dev/null 2>&1; then
+        command -v conda
+        return
+    fi
+
+    for candidate in \
+        "$HOME/.local/share/floability-remote/miniforge/bin/conda" \
+        "$HOME/miniforge3/bin/conda" \
+        "$HOME/mambaforge/bin/conda" \
+        "$HOME/anaconda3/bin/conda" \
+        "$HOME/miniconda3/bin/conda"; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+    done
+}
+
+conda_path=$(find_conda || true)
+env_prefix=""
+floability_version=""
+
+if [ -n "$conda_path" ]; then
+    env_prefix=$("$conda_path" run -n "$env_name" python -c \
+        'import sys; print(sys.prefix)' 2>/dev/null | tail -n 1 || true)
+    if [ -n "$env_prefix" ] && [ -x "$env_prefix/bin/floability" ]; then
+        floability_version=$("$env_prefix/bin/python" -c \
+            'from importlib.metadata import version; print(version("floability"))' \
+            2>/dev/null | tail -n 1 || true)
+    fi
+fi
+
+downloader=""
+if command -v curl >/dev/null 2>&1; then
+    downloader="curl"
+elif command -v wget >/dev/null 2>&1; then
+    downloader="wget"
+fi
+
+printf '__FLOABILITY_REMOTE_OS__=%s\n' "$(uname -s 2>/dev/null || true)"
+printf '__FLOABILITY_REMOTE_ARCH__=%s\n' "$(uname -m 2>/dev/null || true)"
+printf '__FLOABILITY_REMOTE_CONDA__=%s\n' "$conda_path"
+printf '__FLOABILITY_REMOTE_ENV_PREFIX__=%s\n' "$env_prefix"
+printf '__FLOABILITY_REMOTE_VERSION__=%s\n' "$floability_version"
+git_available=$(command -v git >/dev/null 2>&1 && printf yes || printf no)
+setsid_available=$(command -v setsid >/dev/null 2>&1 && printf yes || printf no)
+printf '__FLOABILITY_REMOTE_GIT__=%s\n' "$git_available"
+printf '__FLOABILITY_REMOTE_SETSID__=%s\n' "$setsid_available"
+printf '__FLOABILITY_REMOTE_DOWNLOADER__=%s\n' "$downloader"
+"""
+
+
+INSTALL_MINIFORGE = r"""
+set -euo pipefail
+
+architecture=$1
+destination="$HOME/.local/share/floability-remote/miniforge"
+work_dir="$HOME/.cache/floability-remote/bootstrap"
+
+case "$architecture" in
+    x86_64) installer=Miniforge3-Linux-x86_64.sh ;;
+    aarch64|arm64) installer=Miniforge3-Linux-aarch64.sh ;;
+    *)
+        echo "Unsupported remote architecture for Miniforge: $architecture" >&2
+        exit 2
+        ;;
+esac
+
+if [ -x "$destination/bin/conda" ]; then
+    printf 'Miniforge already exists at %s\n' "$destination"
+    exit 0
+fi
+
+mkdir -p "$work_dir" "$(dirname "$destination")"
+installer_path="$work_dir/$installer"
+checksum_path="$installer_path.sha256"
+base_url="https://github.com/conda-forge/miniforge/releases/latest/download"
+
+if command -v curl >/dev/null 2>&1; then
+    curl --fail --location --show-error --silent \
+        --output "$installer_path" "$base_url/$installer"
+    curl --fail --location --show-error --silent \
+        --output "$checksum_path" "$base_url/$installer.sha256"
+elif command -v wget >/dev/null 2>&1; then
+    wget --quiet --output-document="$installer_path" "$base_url/$installer"
+    wget --quiet --output-document="$checksum_path" "$base_url/$installer.sha256"
+else
+    echo "Neither curl nor wget is available on the remote host." >&2
+    exit 2
+fi
+
+(
+    cd "$work_dir"
+    sha256sum --check "$installer.sha256"
+)
+
+bash "$installer_path" -b -p "$destination"
+rm -f -- "$installer_path" "$checksum_path"
+"$destination/bin/conda" --version
+"""
+
+
+PREPARE_ENVIRONMENT = r"""
+set -euo pipefail
+
+conda_path=$1
+env_name=$2
+requested_version=$3
+existing_prefix=$4
+
+package_spec=floability
+if [ -n "$requested_version" ]; then
+    package_spec="floability=$requested_version"
+fi
+
+if [ -z "$existing_prefix" ]; then
+    echo "Creating remote Conda environment '$env_name'..."
+    "$conda_path" create -y -n "$env_name" \
+        --channel conda-forge \
+        --strict-channel-priority \
+        python=3.12 "$package_spec"
+else
+    echo "Installing Floability in existing environment '$env_name'..."
+    "$conda_path" install -y -n "$env_name" \
+        --channel conda-forge \
+        --strict-channel-priority \
+        "$package_spec"
+fi
+"""
+
+
+CLONE_BACKPACK = r"""
+set -euo pipefail
+
+remote_root=$1
+run_id=$2
+repository=$3
+git_ref=$4
+
+case "$remote_root" in
+    "~/"*) remote_root="$HOME/${remote_root#\~/}" ;;
+esac
+
+run_dir="$remote_root/$run_id"
+backpack_dir="$run_dir/backpack"
+mkdir -p "$run_dir"
+printf '%s\n' "$run_id" > "$run_dir/.floability-remote-run"
+
+git clone -- "$repository" "$backpack_dir"
+if [ -n "$git_ref" ]; then
+    git -C "$backpack_dir" checkout --detach "$git_ref"
+fi
+
+printf '__FLOABILITY_REMOTE_RUN_DIR__=%s\n' "$run_dir"
+printf '__FLOABILITY_REMOTE_BACKPACK__=%s\n' "$backpack_dir"
+"""
+
+
+LAUNCH_FLOABILITY = r"""
+set -u
+
+conda_path=$1
+env_prefix=$2
+run_dir=$3
+backpack_dir=$4
+mode=$5
+batch_type=$6
+jupyter_port=$7
+entrypoint=$8
+
+case "$mode" in
+    run|execute) ;;
+    *)
+        echo "Unsupported Floability mode: $mode" >&2
+        exit 2
+        ;;
+esac
+
+state_file="$run_dir/floability.pid"
+stdout_file="$run_dir/${mode}-command.log"
+
+export CONDA_EXE="$conda_path"
+export PATH="$env_prefix/bin:$PATH"
+export PYTHONUNBUFFERED=1
+export FLOABILITY_ACCESS_HOST=localhost
+
+command=(
+    "$env_prefix/bin/floability"
+    "$mode"
+    --backpack "$backpack_dir"
+    --batch-type "$batch_type"
+)
+if [ "$mode" = run ]; then
+    command+=(--jupyter-port "$jupyter_port")
+fi
+if [ -n "$entrypoint" ]; then
+    command+=(--entrypoint "$entrypoint")
+fi
+
+echo "Remote run directory: $run_dir"
+echo "Remote command: floability $mode --backpack <clone> --batch-type $batch_type"
+
+setsid "${command[@]}" > >(tee -a "$stdout_file") 2>&1 &
+floability_pid=$!
+printf '%s\n' "$floability_pid" > "$state_file"
+
+set +e
+wait "$floability_pid"
+status=$?
+set -e
+
+rm -f -- "$state_file"
+exit "$status"
+"""
+
+
+STOP_FLOABILITY = r"""
+set -u
+
+run_dir=$1
+signal_name=$2
+wait_seconds=$3
+state_file="$run_dir/floability.pid"
+
+if [ ! -f "$state_file" ]; then
+    echo "No active remote PID file was found."
+    exit 0
+fi
+
+pid=$(cat "$state_file")
+case "$pid" in
+    ''|*[!0-9]*)
+        echo "Invalid PID file: $state_file" >&2
+        exit 2
+        ;;
+esac
+
+if ! kill -0 "$pid" 2>/dev/null; then
+    rm -f -- "$state_file"
+    echo "Remote Floability process has already stopped."
+    exit 0
+fi
+
+echo "Sending SIG$signal_name to remote Floability process $pid..."
+kill -s "$signal_name" "$pid"
+
+deadline=$((SECONDS + wait_seconds))
+while kill -0 "$pid" 2>/dev/null; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+        printf '__FLOABILITY_REMOTE_STILL_RUNNING__=%s\n' "$pid"
+        exit 3
+    fi
+    sleep 1
+done
+
+rm -f -- "$state_file"
+echo "Remote Floability process stopped."
+"""
+
+
+ALL = (
+    PROBE,
+    INSTALL_MINIFORGE,
+    PREPARE_ENVIRONMENT,
+    CLONE_BACKPACK,
+    LAUNCH_FLOABILITY,
+    STOP_FLOABILITY,
+)
