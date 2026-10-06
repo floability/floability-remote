@@ -9,6 +9,9 @@ from .output import Reporter, parse_probe
 from .ssh import SSHSession
 
 
+MANAGED_CONDA = "~/.local/share/floability-remote/miniforge/bin/conda"
+
+
 def probe_remote(session: SSHSession, env_name: str, conda_executable: str) -> RemoteProbe:
     result = session.run_script(
         remote_scripts.PROBE,
@@ -32,15 +35,23 @@ def probe_remote(session: SSHSession, env_name: str, conda_executable: str) -> R
 def ensure_environment(session: SSHSession, args, reporter: Reporter) -> RemoteProbe:
     probe = probe_remote(session, args.env_name, args.conda_executable)
 
-    if not probe.conda:
+    if args.reinstall_miniforge:
+        reporter.detail("Replacing Floability Remote's user-scoped Miniforge...")
+        session.run_script(
+            remote_scripts.INSTALL_MINIFORGE,
+            (probe.architecture, "yes"),
+            show_output=args.verbose,
+        )
+        probe = probe_remote(session, args.env_name, MANAGED_CONDA)
+    elif not probe.conda:
         _confirm_miniforge(args, probe)
         reporter.detail("Conda not found; installing user-scoped Miniforge...")
         session.run_script(
             remote_scripts.INSTALL_MINIFORGE,
-            (probe.architecture,),
+            (probe.architecture, "no"),
             show_output=args.verbose,
         )
-        probe = probe_remote(session, args.env_name, args.conda_executable)
+        probe = probe_remote(session, args.env_name, MANAGED_CONDA)
 
     requested_version_ready = (
         not args.floability_version

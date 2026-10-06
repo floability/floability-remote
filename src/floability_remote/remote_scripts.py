@@ -6,6 +6,10 @@ set -u
 env_name=$1
 requested_conda=$2
 
+case "$requested_conda" in
+    "~/"*) requested_conda="$HOME/${requested_conda#\~/}" ;;
+esac
+
 find_conda() {
     if [ -n "$requested_conda" ] && [ -x "$requested_conda" ]; then
         printf '%s\n' "$requested_conda"
@@ -68,6 +72,7 @@ INSTALL_MINIFORGE = r"""
 set -euo pipefail
 
 architecture=$1
+reinstall=$2
 destination="$HOME/.local/share/floability-remote/miniforge"
 work_dir="$HOME/.cache/floability-remote/bootstrap"
 
@@ -80,37 +85,95 @@ case "$architecture" in
         ;;
 esac
 
-if [ -x "$destination/bin/conda" ]; then
-    printf 'Miniforge already exists at %s\n' "$destination"
-    exit 0
+backup=""
+
+restore_previous_installation() {
+    status=$?
+    trap - EXIT
+    if [ "$status" -ne 0 ]; then
+        rm -rf -- "$destination"
+        if [ -n "$backup" ] && [ -e "$backup" ]; then
+            mv -- "$backup" "$destination"
+            echo "Restored the previous managed Miniforge installation." >&2
+        fi
+    fi
+    exit "$status"
+}
+
+if [ -e "$destination" ]; then
+    if [ "$reinstall" = yes ]; then
+        backup="${destination}.reinstall-backup.$$"
+        if [ -e "$backup" ]; then
+            echo "Temporary Miniforge backup path already exists: $backup" >&2
+            exit 2
+        fi
+        mv -- "$destination" "$backup"
+        trap restore_previous_installation EXIT
+    elif [ -x "$destination/bin/conda" ]; then
+        printf 'Miniforge already exists at %s\n' "$destination"
+        exit 0
+    else
+        echo "Miniforge destination exists but is incomplete: $destination" >&2
+        echo "Re-run with --reinstall-miniforge to replace it." >&2
+        exit 2
+    fi
 fi
 
 mkdir -p "$work_dir" "$(dirname "$destination")"
 installer_path="$work_dir/$installer"
-checksum_path="$installer_path.sha256"
+metadata_path="$work_dir/miniforge-release.json"
 base_url="https://github.com/conda-forge/miniforge/releases/latest/download"
+metadata_url="https://api.github.com/repos/conda-forge/miniforge/releases/latest"
 
 if command -v curl >/dev/null 2>&1; then
     curl --fail --location --show-error --silent \
         --output "$installer_path" "$base_url/$installer"
     curl --fail --location --show-error --silent \
-        --output "$checksum_path" "$base_url/$installer.sha256"
+        --output "$metadata_path" "$metadata_url"
 elif command -v wget >/dev/null 2>&1; then
     wget --quiet --output-document="$installer_path" "$base_url/$installer"
-    wget --quiet --output-document="$checksum_path" "$base_url/$installer.sha256"
+    wget --quiet --output-document="$metadata_path" "$metadata_url"
 else
     echo "Neither curl nor wget is available on the remote host." >&2
     exit 2
 fi
 
-(
-    cd "$work_dir"
-    sha256sum --check "$installer.sha256"
+if ! command -v sha256sum >/dev/null 2>&1; then
+    echo "sha256sum is required to verify the Miniforge installer." >&2
+    exit 2
+fi
+
+expected_sha256=$(
+    sed -n '
+        /"name": "'"$installer"'"/,/"digest":/ {
+            /"digest":/ {
+                s/.*"digest": "sha256:\([0-9a-fA-F]*\)".*/\1/p
+                q
+            }
+        }
+    ' "$metadata_path"
 )
 
+if [ "${#expected_sha256}" -ne 64 ]; then
+    echo "Could not find the Miniforge installer digest in GitHub release metadata." >&2
+    exit 2
+fi
+
+actual_sha256=$(sha256sum "$installer_path" | awk '{print $1}')
+if [ "$actual_sha256" != "$expected_sha256" ]; then
+    echo "Miniforge installer checksum verification failed." >&2
+    exit 2
+fi
+
 bash "$installer_path" -b -p "$destination"
-rm -f -- "$installer_path" "$checksum_path"
+rm -f -- "$installer_path" "$metadata_path"
 "$destination/bin/conda" --version
+
+if [ -n "$backup" ]; then
+    rm -rf -- "$backup"
+    backup=""
+fi
+trap - EXIT
 """
 
 

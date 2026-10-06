@@ -18,7 +18,18 @@ class RemoteScriptTests(unittest.TestCase):
         self.assertIn('"$env_prefix/bin/floability"', remote_scripts.LAUNCH_FLOABILITY)
         self.assertIn('"$mode"', remote_scripts.LAUNCH_FLOABILITY)
 
+    def test_miniforge_uses_release_digest(self):
+        script = remote_scripts.INSTALL_MINIFORGE
+        self.assertIn("api.github.com/repos/conda-forge/miniforge/releases/latest", script)
+        self.assertIn('sha256sum "$installer_path"', script)
+        self.assertNotIn('$base_url/$installer.sha256', script)
+
+    def test_miniforge_reinstall_preserves_previous_install_on_failure(self):
+        script = remote_scripts.INSTALL_MINIFORGE
+        self.assertIn("reinstall=$2", script)
+        self.assertIn('mv -- "$destination" "$backup"', script)
+        self.assertIn("restore_previous_installation", script)
+
 
 if __name__ == "__main__":
     unittest.main()
-

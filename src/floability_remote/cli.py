@@ -80,6 +80,14 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="Absolute remote Conda path when discovery is insufficient.",
     )
     parser.add_argument(
+        "--reinstall-miniforge",
+        action="store_true",
+        help=(
+            "Replace Floability Remote's user-scoped Miniforge installation and "
+            "use it even when another Conda installation is available."
+        ),
+    )
+    parser.add_argument(
         "--remote-root",
         default=DEFAULT_REMOTE_ROOT,
         help="Parent directory for remote runs.",
@@ -141,6 +149,10 @@ def validate_args(args: argparse.Namespace) -> None:
         r"[A-Za-z0-9_.+!-]+", args.floability_version
     ):
         raise RemoteRunError("--floability-version contains unsupported characters.")
+    if args.reinstall_miniforge and args.conda_executable:
+        raise RemoteRunError(
+            "--reinstall-miniforge cannot be combined with --conda-executable."
+        )
     if not args.remote_root.strip() or "\n" in args.remote_root:
         raise RemoteRunError("--remote-root must be a non-empty remote path.")
     if args.identity_file:

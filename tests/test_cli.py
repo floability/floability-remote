@@ -37,6 +37,21 @@ class ParserTests(unittest.TestCase):
     def test_verbose_mode_is_explicit(self):
         self.assertTrue(self.parse("execute", "--verbose").verbose)
 
+    def test_reinstall_miniforge_mode_is_explicit(self):
+        self.assertTrue(
+            self.parse("execute", "--reinstall-miniforge").reinstall_miniforge
+        )
+
+    def test_reinstall_miniforge_rejects_explicit_conda(self):
+        args = self.parse(
+            "execute",
+            "--reinstall-miniforge",
+            "--conda-executable",
+            "/opt/conda/bin/conda",
+        )
+        with self.assertRaises(RemoteRunError):
+            validate_args(args)
+
     def test_invalid_port_is_rejected(self):
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
@@ -64,4 +79,3 @@ class ParserTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

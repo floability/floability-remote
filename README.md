@@ -9,34 +9,40 @@ remote system and does not modify Floability itself.
 
 ## Local installation
 
-You need Python 3.9 or newer and the system OpenSSH client. From the repository
-root, create an isolated local environment and install the command:
+You need Python 3.9 or newer and the system OpenSSH client. Install the command
+and its isolated virtual environment with:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install .
+curl -fsSL https://raw.githubusercontent.com/floability/floability-remote/main/install.sh | sh
 ```
 
-Confirm the installation:
+The installer places the environment under
+`~/.local/share/floability-remote/venv` and links the command into
+`~/.local/bin`. You do not need to activate the environment. Confirm the
+installation:
 
 ```bash
 floability-remote --version
 floability-remote --help
 ```
 
-Whenever you open a new terminal, activate the environment before using the
-command:
+If `~/.local/bin` is not already on `PATH`, the installer prints the one-line
+`export PATH=...` command needed by the current terminal. Add the same line to
+your shell profile to make it permanent.
+
+Run the installer again to update to the latest version from the `main` branch.
+
+### Development installation
+
+To work on the source, clone the repository and install it in an editable
+environment instead:
 
 ```bash
-cd <PATH_TO_FLOABILITY_REMOTE>
+git clone https://github.com/floability/floability-remote.git
+cd floability-remote
+python3 -m venv .venv
 source .venv/bin/activate
-```
-
-If you are modifying the source code, install it in editable mode instead:
-
-```bash
+python -m pip install --upgrade pip
 python -m pip install --editable .
 ```
 
@@ -127,6 +133,22 @@ If Conda is unavailable, the client offers to install user-scoped Miniforge at:
 
 Use `--yes` to approve that bootstrap non-interactively. No remote `sudo` access
 is required.
+
+To ignore another Conda installation and replace Floability Remote's managed
+Miniforge with a clean installation, use:
+
+```bash
+floability-remote execute \
+  --target my-cluster \
+  --backpack <GITHUB_URL> \
+  --batch-type slurm \
+  --reinstall-miniforge
+```
+
+This replaces only
+`~/.local/share/floability-remote/miniforge`. It does not modify a system Conda
+installation or Miniforge installed elsewhere. Environments inside the managed
+installation are recreated as needed.
 
 Use an exact Floability release when creating or repairing the environment:
 
