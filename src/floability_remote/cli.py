@@ -17,6 +17,7 @@ from .config import (
     ConnectionConfig,
     EnvironmentConfig,
     RunConfig,
+    parse_floability_option,
     validate_run_config,
 )
 from .errors import RemoteRunError
@@ -139,6 +140,16 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
             "<base-dir>/floability-data-cache when omitted."
         ),
     )
+    parser.add_argument(
+        "--floability-option",
+        action="append",
+        default=[],
+        metavar="NAME[=VALUE]",
+        help=(
+            "Extra option passed to floability, such as workers=2 for "
+            "'--workers 2'; repeat when needed."
+        ),
+    )
     parser.add_argument("--identity-file", help="Optional local SSH private-key path.")
     parser.add_argument(
         "--ssh-option",
@@ -191,6 +202,9 @@ def config_from_args(args: argparse.Namespace) -> RunConfig:
         data_cache_dir=args.data_cache_dir,
         jupyter_port=args.jupyter_port,
         local_port=args.local_port,
+        floability_options=tuple(
+            parse_floability_option(*raw.split("=", 1)) for raw in args.floability_option
+        ),
     )
 
 
@@ -231,6 +245,9 @@ def cli_arguments(config: RunConfig) -> List[str]:
     option("--remote-root", config.remote_root, DEFAULT_REMOTE_ROOT)
     option("--base-dir", config.base_dir, "")
     option("--data-cache-dir", config.data_cache_dir, "")
+    for extra in config.floability_options:
+        value = f"{extra.name}={extra.value}" if extra.value else extra.name
+        arguments.extend(["--floability-option", value])
 
     if config.mode == "run":
         option("--jupyter-port", config.jupyter_port, DEFAULT_JUPYTER_PORT)

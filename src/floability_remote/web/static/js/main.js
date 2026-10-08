@@ -1,6 +1,7 @@
 import { api, ApiError } from "./api.js";
 import { ConnectionCard } from "./connection.js";
 import {
+  addOptionRow,
   applyDefaults,
   renderChoices,
   serialize,
@@ -364,6 +365,9 @@ async function start() {
     validate();
   });
   startButton.addEventListener("click", startRun);
+  document.getElementById("add-floability-option").addEventListener("click", () => {
+    addOptionRow(form).focus();
+  });
 
   copyButton.addEventListener("click", async () => {
     try {

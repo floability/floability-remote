@@ -10,7 +10,10 @@ from floability_remote.config import (
     ConfigError,
     ConnectionConfig,
     EnvironmentConfig,
+    FloabilityOption,
     RunConfig,
+    floability_option_arguments,
+    parse_floability_option,
     run_config_issues,
     validate_run_config,
 )
@@ -90,6 +93,39 @@ class RunConfigValidationTests(unittest.TestCase):
             fields(config(base_dir="~/floability base", data_cache_dir="/scratch/data")),
             [],
         )
+
+    def test_floability_options_are_normalized_and_flattened(self):
+        options = (
+            parse_floability_option("--workers", " 2 "),
+            parse_floability_option("label", "two words"),
+            parse_floability_option("-verbose"),
+        )
+        self.assertEqual(fields(config(floability_options=options)), [])
+        self.assertEqual(
+            floability_option_arguments(options),
+            ["--workers", "2", "--label", "two words", "--verbose"],
+        )
+
+    def test_invalid_floability_options(self):
+        options = (
+            parse_floability_option("workers", "2"),
+            parse_floability_option("bad name", "x"),
+            parse_floability_option("", "orphan value"),
+            parse_floability_option("batch-type", "slurm"),
+            FloabilityOption("label", "line\nbreak"),
+        )
+        issues = run_config_issues(config(floability_options=options))
+        self.assertEqual(
+            [issue.field for issue in issues],
+            [
+                "floability_options.1.name",
+                "floability_options.2.name",
+                "floability_options.3.name",
+                "floability_options.4.value",
+            ],
+        )
+        self.assertIn("set by Floability Remote", issues[2].message)
+        self.assertIn("batch system", issues[2].message)
 
     def test_all_issues_are_reported_together(self):
         with self.assertRaises(ConfigError) as caught:

@@ -17,6 +17,7 @@ from ..config import (
     EnvironmentConfig,
     RunConfig,
     ValidationIssue,
+    parse_floability_option,
 )
 
 
@@ -43,6 +44,13 @@ class BackpackModel(StrictModel):
     ref: str = ""
 
 
+class FloabilityOptionModel(StrictModel):
+    """`{"name": "workers", "value": "2"}` becomes `--workers 2`."""
+
+    name: str
+    value: str = ""
+
+
 class RunRequest(StrictModel):
     mode: str
     connection: ConnectionModel
@@ -55,6 +63,7 @@ class RunRequest(StrictModel):
     data_cache_dir: str = ""
     jupyter_port: int = DEFAULT_JUPYTER_PORT
     local_port: Optional[int] = None
+    floability_options: List[FloabilityOptionModel] = Field(default_factory=list)
 
     def to_config(self) -> RunConfig:
         return RunConfig(
@@ -79,6 +88,10 @@ class RunRequest(StrictModel):
             data_cache_dir=self.data_cache_dir,
             jupyter_port=self.jupyter_port,
             local_port=self.local_port,
+            floability_options=tuple(
+                parse_floability_option(option.name, option.value)
+                for option in self.floability_options
+            ),
         )
 
 

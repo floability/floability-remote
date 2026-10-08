@@ -5,7 +5,7 @@ import threading
 from typing import Optional, Tuple
 
 from . import remote_scripts
-from .config import RunConfig
+from .config import RunConfig, floability_option_arguments
 from .environment import ensure_environment
 from .errors import RemoteRunError
 from .events import Emitter, EventKind, EventSink, Redactor
@@ -181,6 +181,7 @@ class RemoteWorkflow:
                     self.config.entrypoint,
                     self.config.base_dir,
                     self.config.data_cache_dir,
+                    *floability_option_arguments(self.config.floability_options),
                 ),
             )
 

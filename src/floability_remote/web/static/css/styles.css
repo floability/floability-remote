@@ -344,6 +344,31 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
   border-top: 1px solid var(--border);
 }
 
+/* Extra Floability options: name/value rows */
+.option-list { display: grid; gap: 8px; }
+.option-list:empty { display: none; }
+.option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.option-row .field { gap: 4px; }
+.icon-button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-button:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.icon-button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus); }
+.add-option { justify-self: start; }
+
 .note { margin: 0; font-size: 13px; color: var(--text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* Summary column --------------------------------------------------------- */

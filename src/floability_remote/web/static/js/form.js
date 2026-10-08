@@ -64,8 +64,66 @@ function assign(target, path, value) {
   node[parts.at(-1)] = value;
 }
 
+// Extra Floability options: rows of name/value inputs. The inputs have no
+// `name` attribute, so they are serialized here as a list rather than above.
+
+const OPTION_LIST = "floability-options";
+
+function optionField(index, part, label, placeholder) {
+  const input = element("input", {
+    type: "text",
+    class: `option-${part}`,
+    placeholder,
+    spellcheck: "false",
+    autocomplete: "off",
+    "aria-label": label,
+  });
+  const field = element("div", { class: "field", "data-field": `floability_options.${index}.${part}`, "data-label": label }, [
+    input,
+    element("p", { class: "field-error", "aria-live": "polite" }),
+  ]);
+  return { field, input };
+}
+
+export function addOptionRow(form, option = {}) {
+  const list = form.querySelector(`#${OPTION_LIST}`);
+  const index = list.children.length;
+  const name = optionField(index, "name", "Option name", "workers");
+  const value = optionField(index, "value", "Option value", "2");
+  name.input.value = option.name || "";
+  value.input.value = option.value || "";
+  const remove = element("button", { type: "button", class: "icon-button", "aria-label": "Remove option", text: "×" });
+  const row = element("div", { class: "option-row" }, [name.field, value.field, remove]);
+  remove.addEventListener("click", () => {
+    row.remove();
+    // Removing a row changes the request; let the form revalidate.
+    list.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  list.append(row);
+  return name.input;
+}
+
+function serializeOptions(form) {
+  const options = [];
+  for (const row of form.querySelectorAll(`#${OPTION_LIST} .option-row`)) {
+    const name = row.querySelector(".option-name").value.trim();
+    const value = row.querySelector(".option-value").value.trim();
+    const [nameField, valueField] = row.querySelectorAll("[data-field]");
+    if (!name && !value) {
+      // Blank rows are ignored; give them paths no issue can match.
+      nameField.dataset.field = valueField.dataset.field = "floability_options.blank";
+      continue;
+    }
+    // Number fields by request position so server issues map back to rows.
+    nameField.dataset.field = `floability_options.${options.length}.name`;
+    valueField.dataset.field = `floability_options.${options.length}.value`;
+    options.push({ name, value });
+  }
+  return options;
+}
+
 export function serialize(form) {
-  const payload = {};
+  const payload = { floability_options: serializeOptions(form) };
   for (const input of form.elements) {
     if (!input.name || input.disabled) continue;
     if (input.type === "radio") {

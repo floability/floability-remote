@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -192,6 +193,43 @@ bash -s -- floability-remote-managed ""
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("__FLOABILITY_REMOTE_ENV_PREFIX__=\n", result.stdout)
+
+    def test_extra_floability_options_are_passed_as_separate_arguments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools, prefix = root / "tools", root / "env"
+            run_dir, backpack = root / "run", root / "run" / "backpack"
+            for path in (tools, prefix / "bin", backpack):
+                path.mkdir(parents=True)
+            executable(tools / "setsid", UTIL_LINUX_SETSID)
+            executable(
+                prefix / "bin" / "floability",
+                f"#!{sys.executable}\nimport json, sys\nprint('ARGV=' + json.dumps(sys.argv[1:]))\n",
+            )
+            (prefix / "bin" / "python").symlink_to(sys.executable)
+
+            result = subprocess.run(
+                [
+                    "bash", "-s", "--", "conda", str(prefix), str(run_dir),
+                    str(backpack), "execute", "local", "8888", "", "", "",
+                    "--workers", "2", "--label", "two words; $(not run)", "--verbose",
+                ],
+                input=remote_scripts.LAUNCH_FLOABILITY,
+                text=True,
+                capture_output=True,
+                env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"},
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        argv_line = next(line for line in result.stdout.splitlines() if line.startswith("ARGV="))
+        self.assertEqual(
+            json.loads(argv_line[len("ARGV="):]),
+            [
+                "execute", "--backpack", str(backpack), "--batch-type", "local",
+                "--workers", "2", "--label", "two words; $(not run)", "--verbose",
+            ],
+        )
 
     def test_stop_interrupts_the_launched_floability(self):
         """Run the real launch and stop scripts against a stand-in Floability.

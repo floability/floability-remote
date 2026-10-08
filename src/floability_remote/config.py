@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from .errors import RemoteRunError
 
@@ -43,6 +43,51 @@ class BackpackSource:
 
 
 @dataclass(frozen=True)
+class FloabilityOption:
+    """An extra `floability run/execute` option, such as `--workers 2`.
+
+    `name` is stored without leading dashes; an empty `value` passes the option
+    as a bare flag.
+    """
+
+    name: str
+    value: str = ""
+
+    @property
+    def flag(self) -> str:
+        return f"--{self.name}"
+
+    def arguments(self) -> List[str]:
+        return [self.flag, self.value] if self.value else [self.flag]
+
+
+# Options Floability Remote sets itself; use the dedicated settings instead.
+MANAGED_FLOABILITY_OPTIONS = {
+    "backpack": "the backpack repository",
+    "batch-type": "the batch system",
+    "entrypoint": "the entrypoint",
+    "jupyter-port": "the remote Jupyter port",
+    "base-dir": "the Floability base directory",
+    "data-cache-dir": "the data cache directory",
+}
+
+_OPTION_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+
+
+def parse_floability_option(name: str, value: str = "") -> FloabilityOption:
+    """Accept `workers`, `-workers`, or `--workers`; validation happens later."""
+    return FloabilityOption(name=name.strip().lstrip("-"), value=value.strip())
+
+
+def floability_option_arguments(options: Sequence[FloabilityOption]) -> List[str]:
+    """Flatten options into the argument list appended to `floability`."""
+    arguments: List[str] = []
+    for option in options:
+        arguments.extend(option.arguments())
+    return arguments
+
+
+@dataclass(frozen=True)
 class RunConfig:
     """Everything needed for one remote `floability run` or `execute`."""
 
@@ -57,6 +102,7 @@ class RunConfig:
     data_cache_dir: str = ""
     jupyter_port: int = DEFAULT_JUPYTER_PORT
     local_port: Optional[int] = None
+    floability_options: Tuple[FloabilityOption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -181,12 +227,47 @@ def run_config_issues(config: RunConfig) -> List[ValidationIssue]:
                 "must be a remote path and cannot begin with '-' or contain control characters.",
                 flag,
             )
+    issues.extend(floability_option_issues(config.floability_options))
     if not valid_port(config.jupyter_port):
         problem("jupyter_port", "must be between 1 and 65535.", "--jupyter-port")
     if not valid_port(config.local_port):
         problem("local_port", "must be between 1 and 65535.", "--local-port")
 
     issues.extend(_identity_issues(config.connection))
+    return issues
+
+
+def floability_option_issues(
+    options: Sequence[FloabilityOption],
+) -> List[ValidationIssue]:
+    """Validate extra Floability options; fields are `floability_options.N.*`."""
+    issues = []
+    for index, option in enumerate(options):
+        prefix = f"floability_options.{index}"
+        if not _OPTION_NAME.fullmatch(option.name):
+            issues.append(
+                ValidationIssue(
+                    f"{prefix}.name",
+                    f"Floability option '{option.name}' must be a name such as "
+                    "'workers' (letters, numbers, '-' and '_').",
+                )
+            )
+        elif option.name in MANAGED_FLOABILITY_OPTIONS:
+            issues.append(
+                ValidationIssue(
+                    f"{prefix}.name",
+                    f"Floability option '{option.flag}' is set by Floability Remote; "
+                    f"use the setting for {MANAGED_FLOABILITY_OPTIONS[option.name]}.",
+                )
+            )
+        if _has_control_characters(option.value):
+            issues.append(
+                ValidationIssue(
+                    f"{prefix}.value",
+                    f"The value for Floability option '{option.flag}' cannot contain "
+                    "control characters.",
+                )
+            )
     return issues
 
 

@@ -149,6 +149,21 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("http://127.0.0.1:49172/lab/?token=abc123", output)
         self.assertEqual(session.started_arguments[4], "run")
 
+    def test_floability_options_are_appended_to_launch_arguments(self):
+        FakeSession.process_output = ""
+        FakeSession.process_status = 0
+        args = self.arguments("execute")
+        args.floability_option = ["workers=2", "verbose"]
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
+            stack.enter_context(
+                mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+            )
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            cli_workflow(args).start()
+        launched = FakeSession.last_instance.started_arguments
+        self.assertEqual(list(launched[-3:]), ["--workers", "2", "--verbose"])
+
     def test_execute_waits_without_opening_tunnel(self):
         output, session = self.execute_with_fakes(
             "execute",

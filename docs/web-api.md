@@ -126,9 +126,15 @@ Request (`RunRequest`; omitted fields take CLI defaults):
   "base_dir": "",
   "data_cache_dir": "",
   "jupyter_port": 8888,
-  "local_port": null
+  "local_port": null,
+  "floability_options": [{ "name": "workers", "value": "2" }]
 }
 ```
+
+`floability_options` adds `--name value` (or a bare `--name` when `value` is
+empty) to the `floability` command, like the CLI's repeatable
+`--floability-option NAME=VALUE`. Names may include leading dashes. Issues use
+the paths `floability_options.<index>.name` and `.value`.
 
 Response, always `200` for a well-formed body:
 

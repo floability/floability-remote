@@ -301,6 +301,9 @@ jupyter_port=$7
 entrypoint=$8
 base_dir=$9
 data_cache_dir=${10}
+shift 10
+# Remaining arguments are extra Floability options, already split into words.
+extra_options=("$@")
 
 expand_home() {
     case "$1" in
@@ -346,6 +349,9 @@ if [ -n "$base_dir" ]; then
 fi
 if [ -n "$data_cache_dir" ]; then
     command+=(--data-cache-dir "$data_cache_dir")
+fi
+if [ "${#extra_options[@]}" -gt 0 ]; then
+    command+=("${extra_options[@]}")
 fi
 
 echo "Remote run directory: $run_dir"

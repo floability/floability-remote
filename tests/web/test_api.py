@@ -60,6 +60,37 @@ class ValidateRunTests(unittest.TestCase):
             "--batch-type slurm --entrypoint main.py",
         )
 
+    def test_floability_options_reach_the_cli_command(self):
+        result = self.validate(
+            run_request(
+                floability_options=[
+                    {"name": "--workers", "value": "2"},
+                    {"name": "verbose"},
+                ]
+            )
+        ).json()
+        self.assertTrue(result["valid"], result["issues"])
+        self.assertTrue(
+            result["command"].endswith(
+                "--floability-option workers=2 --floability-option verbose"
+            )
+        )
+
+    def test_managed_floability_option_is_reported_on_its_row(self):
+        result = self.validate(
+            run_request(
+                floability_options=[
+                    {"name": "workers", "value": "2"},
+                    {"name": "backpack", "value": "elsewhere"},
+                ]
+            )
+        ).json()
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            [issue["field"] for issue in result["issues"]],
+            ["floability_options.1.name"],
+        )
+
     def test_issues_match_cli_validation(self):
         body = run_request(
             connection={"target": "-oProxyCommand=x"},
@@ -132,6 +163,9 @@ class CliArgumentRoundTripTests(unittest.TestCase):
             "--jupyter-port", "8999",
             "--local-port", "49000",
             "--reinstall-miniforge",
+            "--floability-option", "workers=2",
+            "--floability-option", "label=two words",
+            "--floability-option", "verbose",
         )
 
     def test_quoting(self):

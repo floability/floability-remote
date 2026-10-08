@@ -211,6 +211,27 @@ floability-remote execute \
 When omitted, Floability uses `~/floability-base-dir` and its
 `floability-data-cache` subdirectory.
 
+## Extra Floability options
+
+Pass any other `floability run` or `floability execute` option with
+`--floability-option NAME=VALUE`, or `--floability-option NAME` for an on/off
+flag. Repeat it as needed:
+
+```bash
+floability-remote execute \
+  --target my-cluster \
+  --backpack <GITHUB_URL> \
+  --batch-type slurm \
+  --floability-option workers=2
+```
+
+This runs `floability execute ... --workers 2`. Each name and value is passed
+as a separate argument, never through a shell. Options that Floability Remote
+sets itself (`--backpack`, `--batch-type`, `--entrypoint`, `--jupyter-port`,
+`--base-dir`, `--data-cache-dir`) are rejected; use their dedicated settings.
+The web interface offers the same rows under **Advanced options → Floability
+options**.
+
 ## Progress and logs
 
 The default display shows concise stages without printing every Conda, Git, or
