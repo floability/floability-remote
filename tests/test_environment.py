@@ -24,15 +24,74 @@ def probe(conda, prefix, version):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_default_conda_creates_managed_environment_when_missing(self):
+        before = probe("/opt/conda/bin/conda", None, None)
+        after = probe(
+            "/opt/conda/bin/conda",
+            "/opt/conda/envs/floability-remote-managed",
+            "0.3.1",
+        )
+        session = mock.Mock()
+        emitter = Emitter(ListSink())
+
+        with mock.patch(
+            "floability_remote.environment.probe_remote",
+            side_effect=(before, after),
+        ) as probe_remote:
+            result = ensure_environment(session, EnvironmentConfig(), emitter)
+
+        self.assertEqual(result, after)
+        self.assertEqual(
+            session.run_script.call_args.args[:2],
+            (
+                remote_scripts.PREPARE_ENVIRONMENT,
+                (
+                    "/opt/conda/bin/conda",
+                    "floability-remote-managed",
+                    "",
+                    "",
+                ),
+            ),
+        )
+        self.assertEqual(probe_remote.call_args_list[1].args[2], before.conda)
+
+    def test_default_conda_repairs_managed_environment_without_floability(self):
+        prefix = "/opt/conda/envs/floability-remote-managed"
+        before = probe("/opt/conda/bin/conda", prefix, None)
+        after = probe("/opt/conda/bin/conda", prefix, "0.3.1")
+        session = mock.Mock()
+
+        with mock.patch(
+            "floability_remote.environment.probe_remote",
+            side_effect=(before, after),
+        ):
+            result = ensure_environment(
+                session, EnvironmentConfig(), Emitter(ListSink())
+            )
+
+        self.assertEqual(result, after)
+        self.assertEqual(
+            session.run_script.call_args.args[:2],
+            (
+                remote_scripts.PREPARE_ENVIRONMENT,
+                (
+                    "/opt/conda/bin/conda",
+                    "floability-remote-managed",
+                    "",
+                    prefix,
+                ),
+            ),
+        )
+
     def test_reinstall_uses_managed_miniforge_even_if_conda_exists(self):
         before = probe(
             "/opt/site/bin/conda",
-            "/opt/site/envs/floability-env",
+            "/opt/site/envs/floability-remote-managed",
             "0.3.0",
         )
         after = probe(
             "/home/test/.local/share/floability-remote/miniforge/bin/conda",
-            "/home/test/.local/share/floability-remote/miniforge/envs/floability-env",
+            "/home/test/.local/share/floability-remote/miniforge/envs/floability-remote-managed",
             "0.3.0",
         )
         session = mock.Mock()
@@ -58,7 +117,7 @@ class EnvironmentTests(unittest.TestCase):
     def test_reinstall_verifies_created_environment_with_managed_conda(self):
         before = probe(
             "/opt/site/bin/conda",
-            "/opt/site/envs/floability-env",
+            "/opt/site/envs/floability-remote-managed",
             "0.3.0",
         )
         managed_without_environment = probe(
@@ -68,7 +127,7 @@ class EnvironmentTests(unittest.TestCase):
         )
         managed_ready = probe(
             "/home/test/.local/share/floability-remote/miniforge/bin/conda",
-            "/home/test/.local/share/floability-remote/miniforge/envs/floability-env",
+            "/home/test/.local/share/floability-remote/miniforge/envs/floability-remote-managed",
             "0.3.1",
         )
         session = mock.Mock()
@@ -94,7 +153,7 @@ class EnvironmentTests(unittest.TestCase):
                 remote_scripts.PREPARE_ENVIRONMENT,
                 (
                     managed_without_environment.conda,
-                    "floability-env",
+                    "floability-remote-managed",
                     "",
                     "",
                 ),
@@ -105,7 +164,7 @@ class EnvironmentTests(unittest.TestCase):
         missing = probe(None, None, None)
         installed = probe(
             "/home/test/.local/share/floability-remote/miniforge/bin/conda",
-            "/home/test/.local/share/floability-remote/miniforge/envs/floability-env",
+            "/home/test/.local/share/floability-remote/miniforge/envs/floability-remote-managed",
             "0.3.1",
         )
         session = mock.Mock()
@@ -154,14 +213,21 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_ready_environment_reports_structured_detail(self):
         sink = ListSink()
-        ready = probe("/opt/conda/bin/conda", "/opt/conda/envs/floability-env", "0.3.1")
+        ready = probe(
+            "/opt/conda/bin/conda",
+            "/opt/conda/envs/floability-remote-managed",
+            "0.3.1",
+        )
         with mock.patch(
             "floability_remote.environment.probe_remote", return_value=ready
         ):
             ensure_environment(mock.Mock(), EnvironmentConfig(), Emitter(sink))
         self.assertEqual(
             [event.message for event in sink.events],
-            ["Environment ready: /opt/conda/envs/floability-env (0.3.1)"],
+            [
+                "Environment ready: "
+                "/opt/conda/envs/floability-remote-managed (0.3.1)"
+            ],
         )
 
 

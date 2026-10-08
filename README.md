@@ -143,18 +143,21 @@ floability-remote run \
 
 ## Remote environment
 
-The client looks for a remote Conda environment named `floability-env`. If the
-environment is missing, it creates the equivalent of:
+The client looks for a remote Conda environment named
+`floability-remote-managed`. It first uses the Conda installation available on
+the remote host. If the environment is missing, or exists without Floability,
+the client creates or repairs it with the equivalent of:
 
 ```bash
-conda create -y -n floability-env \
+conda create -y -n floability-remote-managed \
   -c conda-forge \
   --strict-channel-priority \
   python=3.12 \
   floability
 ```
 
-If Conda is unavailable, the client offers to install user-scoped Miniforge at:
+If no Conda installation can be found, the client asks before installing
+user-scoped Miniforge at:
 
 ```text
 ~/.local/share/floability-remote/miniforge

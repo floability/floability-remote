@@ -62,7 +62,7 @@ class OutputParsingTests(unittest.TestCase):
                 "__FLOABILITY_REMOTE_OS__=Linux",
                 "__FLOABILITY_REMOTE_ARCH__=x86_64",
                 "__FLOABILITY_REMOTE_CONDA__=/opt/conda/bin/conda",
-                "__FLOABILITY_REMOTE_ENV_PREFIX__=/opt/conda/envs/floability-env",
+                "__FLOABILITY_REMOTE_ENV_PREFIX__=/opt/conda/envs/floability-remote-managed",
                 "__FLOABILITY_REMOTE_VERSION__=0.3.1",
                 "__FLOABILITY_REMOTE_GIT__=yes",
                 "__FLOABILITY_REMOTE_SETSID__=yes",
@@ -81,4 +81,3 @@ class OutputParsingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

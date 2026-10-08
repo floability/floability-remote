@@ -10,7 +10,7 @@ from .errors import RemoteRunError
 
 SUPPORTED_MODES = ("run", "execute")
 SUPPORTED_BATCH_TYPES = ("local", "slurm", "condor", "uge")
-DEFAULT_ENV_NAME = "floability-env"
+DEFAULT_ENV_NAME = "floability-remote-managed"
 DEFAULT_REMOTE_ROOT = "~/.cache/floability-remote/runs"
 DEFAULT_JUPYTER_PORT = 8888
 

@@ -23,7 +23,7 @@ class SystemEndpointTests(unittest.TestCase):
         self.assertEqual(meta["api_version"], "v1")
         self.assertEqual(meta["modes"], list(SUPPORTED_MODES))
         self.assertEqual(meta["batch_types"], list(SUPPORTED_BATCH_TYPES))
-        self.assertEqual(meta["defaults"]["env_name"], "floability-env")
+        self.assertEqual(meta["defaults"]["env_name"], "floability-remote-managed")
         for available in ("validate", "connect", "execute", "cancel", "run"):
             self.assertTrue(meta["features"][available]["available"], available)
         self.assertFalse(meta["features"]["transfer"]["available"])

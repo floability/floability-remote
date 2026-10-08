@@ -24,7 +24,7 @@ class ParserTests(unittest.TestCase):
     def test_run_arguments(self):
         args = self.parse("run")
         self.assertEqual(args.command, "run")
-        self.assertEqual(args.env_name, "floability-env")
+        self.assertEqual(args.env_name, "floability-remote-managed")
         self.assertEqual(args.jupyter_port, 8888)
         self.assertFalse(args.verbose)
 

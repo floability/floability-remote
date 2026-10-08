@@ -97,8 +97,8 @@ possible workflows.
 
 There are two different environment layers:
 
-1. **Floability launcher environment**: a remote Conda environment, currently
-   named `floability-env` by default, containing the `floability` command.
+1. **Floability launcher environment**: a remote Conda environment named
+   `floability-remote-managed` by default, containing the `floability` command.
 2. **Backpack software environment**: defined by the backpack and prepared by
    Floability for its manager and workers.
 
@@ -109,8 +109,8 @@ The current client:
 
 1. confirms the remote operating system is Linux;
 2. checks for Git and `setsid`;
-3. discovers Conda or a supported Miniforge installation;
-4. optionally installs user-scoped Miniforge under
+3. uses the remote host's default Conda when one is available;
+4. if Conda is unavailable, asks before installing user-scoped Miniforge under
    `~/.local/share/floability-remote/miniforge`;
 5. creates or repairs the launcher environment with Python 3.12 and
    Floability; and

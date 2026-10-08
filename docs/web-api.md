@@ -88,7 +88,7 @@ Server-owned choices and defaults, so clients do not hard-code them:
   "modes": ["run", "execute"],
   "batch_types": ["local", "slurm", "condor", "uge"],
   "defaults": {
-    "env_name": "floability-env",
+    "env_name": "floability-remote-managed",
     "remote_root": "~/.cache/floability-remote/runs",
     "jupyter_port": 8888
   },
@@ -116,7 +116,7 @@ Request (`RunRequest`; omitted fields take CLI defaults):
   "backpack": { "repository": "https://github.com/floability-hub/matrix-multiplication.git", "ref": "" },
   "batch_type": "slurm",
   "environment": {
-    "env_name": "floability-env",
+    "env_name": "floability-remote-managed",
     "floability_version": "",
     "conda_executable": "",
     "reinstall_miniforge": false
