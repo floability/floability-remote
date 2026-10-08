@@ -277,7 +277,16 @@ fi
 echo "Remote run directory: $run_dir"
 echo "Remote command: floability $mode --backpack <clone> --batch-type $batch_type"
 
-setsid "${command[@]}" > >(tee -a "$stdout_file") 2>&1 &
+# Bash starts background jobs with SIGINT ignored, and Python then never raises
+# KeyboardInterrupt, so Floability could not clean up on SIGINT. Restore the
+# default SIGINT action before exec. Do not use job control (set -m) instead:
+# it makes the job a process-group leader, so util-linux setsid forks and $!
+# would no longer be Floability's PID.
+reset_sigint='import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.execv(sys.argv[1], sys.argv[1:])'
+setsid "$env_prefix/bin/python" -c "$reset_sigint" "${command[@]}" \
+    > >(tee -a "$stdout_file") 2>&1 &
 floability_pid=$!
 printf '%s\n' "$floability_pid" > "$state_file"
 
@@ -335,7 +344,16 @@ echo "Remote Floability process stopped."
 """
 
 
+IDENTIFY = r"""
+set -u
+
+printf '__FLOABILITY_REMOTE_USER__=%s\n' "$(id -un 2>/dev/null || whoami)"
+printf '__FLOABILITY_REMOTE_HOST__=%s\n' "$(hostname 2>/dev/null || uname -n)"
+"""
+
+
 ALL = (
+    IDENTIFY,
     PROBE,
     INSTALL_MINIFORGE,
     PREPARE_ENVIRONMENT,

@@ -9,7 +9,8 @@ remote system and does not modify Floability itself.
 
 ## Local installation
 
-You need Python 3.9 or newer and the system OpenSSH client. Install the command
+You need Python 3.9 or newer and the system OpenSSH client. The installer also
+installs the web interface's Python dependencies (FastAPI and Uvicorn). Install the command
 and its isolated virtual environment with:
 
 ```bash
@@ -86,6 +87,34 @@ floability-remote execute \
 After execution, the client prints the remote backpack directory containing
 the synchronized workflow and generated outputs. Automatic output download is
 planned but not implemented yet.
+
+### Web interface (preview)
+
+Start the local web interface:
+
+```bash
+floability-remote web
+```
+
+The server listens only on `127.0.0.1`, prints a sign-in link, and opens it in
+your browser. Use `--port` to choose the port and `--no-browser` to only print
+the link. Press Ctrl+C to stop it.
+
+From the browser you can:
+
+- connect to a login node; passwords, MFA codes, and new host keys are asked
+  in the page (OpenSSH 8.4 or newer) and never stored;
+- validate a configuration and copy the equivalent CLI command; and
+- execute a backpack, follow its progress and full log, approve a Miniforge
+  installation, and cancel with remote cleanup; and
+- start an interactive run and open JupyterLab from the **Open JupyterLab**
+  link once the SSH tunnel is ready, then stop the session from the page.
+
+Runs and Jupyter sessions continue if you close the tab; reopening the page
+shows them again. Stopping the server with Ctrl+C stops an active run or
+session with remote cleanup and closes the SSH connection. See
+[docs/web-ui-milestones.md](docs/web-ui-milestones.md) and the API reference in
+[docs/web-api.md](docs/web-api.md).
 
 ## Authentication
 
@@ -209,24 +238,43 @@ credential forwarding is not implemented.
 ```text
 src/
 └── floability_remote/
-    ├── cli.py              command definitions and validation
+    ├── cli.py              argument parsing; adapter to the shared services
+    ├── cli_reporter.py     terminal rendering of workflow events
+    ├── config.py           typed run configuration and validation
+    ├── events.py           structured events, sinks, and secret redaction
+    ├── interaction.py      confirmation callbacks and cancellation
+    ├── askpass.py          relay of SSH prompts to a client (web sign-in)
+    ├── connection.py       long-lived SSH connection for the web interface
+    ├── runs.py             background runs, event history, and cancellation
     ├── environment.py      remote Conda and Floability setup
+    ├── workspace.py        remote run directory and backpack clone
+    ├── workflow.py         shared run/execute orchestration
     ├── models.py           shared data structures
-    ├── output.py           quiet progress and Jupyter parsing
+    ├── output.py           remote marker and Floability output parsing
     ├── remote_scripts.py   Bash programs sent through SSH
     ├── ssh.py              OpenSSH sessions and tunnels
-    └── workflow.py         shared run/execute orchestration
+    └── web/
+        ├── server.py       `floability-remote web` startup
+        ├── app.py          FastAPI application factory
+        ├── security.py     loopback, origin, and session checks
+        ├── schemas.py      API request and response models
+        ├── errors.py       JSON error envelope
+        ├── routes/         thin `/api/v1` routes
+        └── static/         packaged HTML, CSS, and JavaScript client
 ```
 
-This separation leaves file transfer as a transport/workflow feature instead
-of mixing it into command parsing or output handling.
+The CLI and web API are adapters around the same services: deployment logic
+lives in `config`, `environment`, `workspace`, and `workflow`, never in
+argument parsing, API routes, or JavaScript.
 
 ## Tests
 
-Tests use the standard library and do not contact a remote host:
+Tests use `unittest` and do not contact a remote host. The web API tests also
+need `httpx`, provided by the `test` extra, and are skipped without it:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python -m pip install --editable '.[test]'
+python -m unittest discover -s tests -v
 ```
 
 Before relying on the client, test both commands against a disposable login

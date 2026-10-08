@@ -1,15 +1,21 @@
 """Discovery and setup of the remote Floability environment."""
 
-import sys
-
 from . import remote_scripts
+from .config import EnvironmentConfig
 from .errors import RemoteRunError
+from .events import Emitter
+from .interaction import INSTALL_MINIFORGE, Confirm, ConfirmationRequest, decline
 from .models import RemoteProbe
-from .output import Reporter, parse_probe
+from .output import parse_probe
 from .ssh import SSHSession
 
 
 MANAGED_CONDA = "~/.local/share/floability-remote/miniforge/bin/conda"
+MINIFORGE_CONFIRMATION = ConfirmationRequest(
+    INSTALL_MINIFORGE,
+    "Conda was not found. Install Miniforge under "
+    "~/.local/share/floability-remote/miniforge?",
+)
 
 
 def probe_remote(session: SSHSession, env_name: str, conda_executable: str) -> RemoteProbe:
@@ -32,71 +38,71 @@ def probe_remote(session: SSHSession, env_name: str, conda_executable: str) -> R
     return probe
 
 
-def ensure_environment(session: SSHSession, args, reporter: Reporter) -> RemoteProbe:
-    probe = probe_remote(session, args.env_name, args.conda_executable)
+def ensure_environment(
+    session: SSHSession,
+    config: EnvironmentConfig,
+    emitter: Emitter,
+    confirm: Confirm = decline,
+) -> RemoteProbe:
+    def run_setup_script(script: str, arguments) -> None:
+        session.run_script(
+            script,
+            arguments,
+            on_output=emitter.log_block,
+            output_in_error=not emitter.logs_visible,
+        )
 
-    if args.reinstall_miniforge:
-        reporter.detail("Replacing Floability Remote's user-scoped Miniforge...")
-        session.run_script(
-            remote_scripts.INSTALL_MINIFORGE,
-            (probe.architecture, "yes"),
-            show_output=args.verbose,
-        )
-        probe = probe_remote(session, args.env_name, MANAGED_CONDA)
+    probe = probe_remote(session, config.env_name, config.conda_executable)
+
+    if config.reinstall_miniforge:
+        emitter.detail("Replacing Floability Remote's user-scoped Miniforge...")
+        run_setup_script(remote_scripts.INSTALL_MINIFORGE, (probe.architecture, "yes"))
+        probe = probe_remote(session, config.env_name, MANAGED_CONDA)
     elif not probe.conda:
-        _confirm_miniforge(args, probe)
-        reporter.detail("Conda not found; installing user-scoped Miniforge...")
-        session.run_script(
-            remote_scripts.INSTALL_MINIFORGE,
-            (probe.architecture, "no"),
-            show_output=args.verbose,
-        )
-        probe = probe_remote(session, args.env_name, MANAGED_CONDA)
+        _confirm_miniforge(probe, confirm)
+        emitter.detail("Conda not found; installing user-scoped Miniforge...")
+        run_setup_script(remote_scripts.INSTALL_MINIFORGE, (probe.architecture, "no"))
+        probe = probe_remote(session, config.env_name, MANAGED_CONDA)
 
     requested_version_ready = (
-        not args.floability_version
-        or probe.floability_version == args.floability_version
+        not config.floability_version
+        or probe.floability_version == config.floability_version
     )
     if not probe.env_prefix or not probe.floability_version or not requested_version_ready:
-        reporter.detail(f"Preparing Conda environment '{args.env_name}'...")
-        session.run_script(
+        emitter.detail(f"Preparing Conda environment '{config.env_name}'...")
+        run_setup_script(
             remote_scripts.PREPARE_ENVIRONMENT,
             (
                 probe.conda or "",
-                args.env_name,
-                args.floability_version,
+                config.env_name,
+                config.floability_version,
                 probe.env_prefix or "",
             ),
-            show_output=args.verbose,
         )
-        probe = probe_remote(session, args.env_name, args.conda_executable)
+        # Keep verifying through the same Conda installation that prepared the
+        # environment. In particular, after --reinstall-miniforge the remote
+        # shell may still expose an unrelated site Conda first on PATH.
+        probe = probe_remote(
+            session,
+            config.env_name,
+            probe.conda or config.conda_executable,
+        )
 
     if not probe.conda or not probe.env_prefix or not probe.floability_version:
         raise RemoteRunError(
-            f"Remote environment '{args.env_name}' does not provide Floability."
+            f"Remote environment '{config.env_name}' does not provide Floability."
         )
 
-    reporter.detail(
+    emitter.detail(
         f"Environment ready: {probe.env_prefix} ({probe.floability_version})"
     )
     return probe
 
 
-def _confirm_miniforge(args, probe: RemoteProbe) -> None:
+def _confirm_miniforge(probe: RemoteProbe, confirm: Confirm) -> None:
     if not probe.downloader:
         raise RemoteRunError(
             "Conda was not found, and neither curl nor wget is available remotely."
         )
-    if args.yes:
-        return
-    if not sys.stdin.isatty():
-        raise RemoteRunError(
-            "Conda was not found. Re-run with --yes to install user-scoped Miniforge."
-        )
-
-    answer = input(
-        "Conda was not found. Install Miniforge under "
-        "~/.local/share/floability-remote/miniforge? [y/N] "
-    )
-    if answer.strip().lower() not in {"y", "yes"}:
+    if not confirm(MINIFORGE_CONFIRMATION):
         raise RemoteRunError("Remote Miniforge installation was declined.")
