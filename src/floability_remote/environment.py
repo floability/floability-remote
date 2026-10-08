@@ -69,7 +69,18 @@ def ensure_environment(
         or probe.floability_version == config.floability_version
     )
     if not probe.env_prefix or not probe.floability_version or not requested_version_ready:
-        emitter.detail(f"Preparing Conda environment '{config.env_name}'...")
+        if not probe.env_prefix:
+            reason = "the environment was not found"
+        elif not probe.floability_version:
+            reason = "Floability was not detected"
+        else:
+            reason = (
+                f"installed Floability {probe.floability_version} does not match "
+                f"requested {config.floability_version}"
+            )
+        emitter.detail(
+            f"Preparing Conda environment '{config.env_name}': {reason}."
+        )
         run_setup_script(
             remote_scripts.PREPARE_ENVIRONMENT,
             (
@@ -88,9 +99,17 @@ def ensure_environment(
             probe.conda or config.conda_executable,
         )
 
-    if not probe.conda or not probe.env_prefix or not probe.floability_version:
+    if not probe.conda:
+        raise RemoteRunError("Conda could not be resolved after environment setup.")
+    if not probe.env_prefix:
         raise RemoteRunError(
-            f"Remote environment '{config.env_name}' does not provide Floability."
+            f"Remote environment '{config.env_name}' was not found using "
+            f"Conda at {probe.conda}."
+        )
+    if not probe.floability_version:
+        raise RemoteRunError(
+            f"Remote environment '{config.env_name}' exists at {probe.env_prefix}, "
+            "but its Floability installation could not be verified."
         )
 
     emitter.detail(

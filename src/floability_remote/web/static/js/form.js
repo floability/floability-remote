@@ -92,7 +92,11 @@ export function selectedMode(form) {
 export function syncModeFields(form) {
   const mode = selectedMode(form);
   for (const group of form.querySelectorAll("[data-mode-only]")) {
-    group.hidden = group.dataset.modeOnly !== mode;
+    const visible = group.dataset.modeOnly === mode;
+    group.hidden = !visible;
+    for (const control of group.querySelectorAll("input, select, textarea, button")) {
+      control.disabled = !visible;
+    }
   }
 }
 
@@ -124,6 +128,8 @@ export function showIssues(form, issues, visibleFields) {
     }
     if (visibleFields && !visibleFields.has(issue.field)) continue;
     field.classList.add("invalid");
+    field.closest(".advanced")?.setAttribute("open", "");
+    field.closest(".advanced-group")?.setAttribute("open", "");
     const error = field.querySelector(".field-error");
     error.textContent = error.textContent || issueText(field, issue);
     shown += 1;

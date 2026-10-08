@@ -279,7 +279,7 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
 
 /* Advanced */
 .advanced { border-top: 1px solid var(--border); padding-top: 14px; }
-.advanced summary {
+.advanced > summary {
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 600;
@@ -289,8 +289,8 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
   align-items: center;
   gap: 8px;
 }
-.advanced summary::-webkit-details-marker { display: none; }
-.advanced summary::before {
+.advanced > summary::-webkit-details-marker { display: none; }
+.advanced > summary::before {
   content: "";
   width: 6px;
   height: 6px;
@@ -299,9 +299,50 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
   transform: rotate(-45deg);
   transition: transform 120ms;
 }
-.advanced[open] summary::before { transform: rotate(45deg); }
-.advanced summary:hover { color: var(--text); }
-.advanced-body { display: grid; gap: 16px; padding-top: 16px; }
+.advanced[open] > summary::before { transform: rotate(45deg); }
+.advanced > summary:hover { color: var(--text); }
+.advanced-body { display: grid; gap: 8px; padding-top: 12px; }
+
+.advanced-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: clip;
+}
+.advanced-group > summary {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  padding: 11px 38px 11px 13px;
+  cursor: pointer;
+  list-style: none;
+  transition: background 120ms;
+}
+.advanced-group > summary::-webkit-details-marker { display: none; }
+.advanced-group > summary::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  transform: translateY(-65%) rotate(45deg);
+  transition: transform 120ms;
+}
+.advanced-group[open] > summary::after {
+  transform: translateY(-25%) rotate(225deg);
+}
+.advanced-group > summary:hover { background: var(--surface-muted); }
+.advanced-group-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.advanced-group-description { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.advanced-group-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px 13px;
+  border-top: 1px solid var(--border);
+}
 
 .note { margin: 0; font-size: 13px; color: var(--text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 

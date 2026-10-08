@@ -66,6 +66,16 @@ class FrontendBoundaryTests(unittest.TestCase):
             <= names
         )
 
+    def test_advanced_options_are_grouped(self):
+        html = (STATIC / "index.html").read_text()
+        self.assertEqual(html.count('class="advanced-group"'), 3)
+        for title in ("Remote environment", "Storage", "Interactive session"):
+            self.assertIn(title, html)
+
+    def test_hidden_mode_fields_are_disabled(self):
+        source = (STATIC / "js" / "form.js").read_text()
+        self.assertIn("control.disabled = !visible", source)
+
 
 class WebCommandParserTests(unittest.TestCase):
     def test_defaults(self):

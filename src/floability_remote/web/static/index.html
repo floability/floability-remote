@@ -192,72 +192,96 @@
           <details class="advanced">
             <summary>Advanced options</summary>
             <div class="advanced-body">
-              <div class="row">
-                <div class="field" data-field="environment.env_name" data-label="Floability environment">
-                  <label for="env-name">Floability environment</label>
-                  <input id="env-name" name="environment.env_name" type="text" spellcheck="false">
-                  <p class="field-error" aria-live="polite"></p>
-                </div>
-                <div class="field" data-field="environment.floability_version" data-label="Floability version">
-                  <label for="floability-version">Floability version <span class="optional">optional</span></label>
-                  <input id="floability-version" name="environment.floability_version" type="text"
-                         spellcheck="false" placeholder="latest">
-                  <p class="field-error" aria-live="polite"></p>
-                </div>
-              </div>
+              <details class="advanced-group">
+                <summary>
+                  <span class="advanced-group-title">Remote environment</span>
+                  <span class="advanced-group-description">Conda and Floability installation</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="row">
+                    <div class="field" data-field="environment.env_name" data-label="Floability environment">
+                      <label for="env-name">Floability environment</label>
+                      <input id="env-name" name="environment.env_name" type="text" spellcheck="false">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="environment.floability_version" data-label="Floability version">
+                      <label for="floability-version">Floability version <span class="optional">optional</span></label>
+                      <input id="floability-version" name="environment.floability_version" type="text"
+                             spellcheck="false" placeholder="latest">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
 
-              <div class="field" data-field="environment.conda_executable" data-label="Conda executable">
-                <label for="conda-executable">Remote Conda executable <span class="optional">optional</span></label>
-                <input id="conda-executable" name="environment.conda_executable" type="text"
-                       spellcheck="false" placeholder="discovered automatically">
-                <p class="field-error" aria-live="polite"></p>
-              </div>
+                  <div class="field" data-field="environment.conda_executable" data-label="Conda executable">
+                    <label for="conda-executable">Remote Conda executable <span class="optional">optional</span></label>
+                    <input id="conda-executable" name="environment.conda_executable" type="text"
+                           spellcheck="false" placeholder="discovered automatically">
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
 
-              <div class="field" data-field="environment.reinstall_miniforge" data-label="Reinstall Miniforge">
-                <label class="check">
-                  <input name="environment.reinstall_miniforge" type="checkbox">
-                  <span>Reinstall Floability Remote's managed Miniforge</span>
-                </label>
-                <p class="field-error" aria-live="polite"></p>
-              </div>
+                  <div class="field" data-field="environment.reinstall_miniforge" data-label="Reinstall Miniforge">
+                    <label class="check">
+                      <input name="environment.reinstall_miniforge" type="checkbox">
+                      <span>Reinstall Floability Remote's managed Miniforge</span>
+                    </label>
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
+                </div>
+              </details>
 
-              <div class="field" data-field="remote_root" data-label="Remote run directory">
-                <label for="remote-root">Remote run directory</label>
-                <input id="remote-root" name="remote_root" type="text" spellcheck="false">
-                <p class="hint">Where Floability Remote stores clones and command logs.</p>
-                <p class="field-error" aria-live="polite"></p>
-              </div>
+              <details class="advanced-group">
+                <summary>
+                  <span class="advanced-group-title">Storage</span>
+                  <span class="advanced-group-description">Runs, environments, and reusable data</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="field" data-field="remote_root" data-label="Remote run directory">
+                    <label for="remote-root">Remote run directory</label>
+                    <input id="remote-root" name="remote_root" type="text" spellcheck="false">
+                    <p class="hint">Where Floability Remote stores clones and command logs.</p>
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
 
-              <div class="row">
-                <div class="field" data-field="base_dir" data-label="Floability base directory">
-                  <label for="base-dir">Floability base directory <span class="optional">optional</span></label>
-                  <input id="base-dir" name="base_dir" type="text" spellcheck="false"
-                         placeholder="~/floability-base-dir">
-                  <p class="hint">Instances and reusable software environments.</p>
-                  <p class="field-error" aria-live="polite"></p>
+                  <div class="row">
+                    <div class="field" data-field="base_dir" data-label="Floability base directory">
+                      <label for="base-dir">Floability base directory <span class="optional">optional</span></label>
+                      <input id="base-dir" name="base_dir" type="text" spellcheck="false"
+                             placeholder="~/floability-base-dir">
+                      <p class="hint">Instances and reusable software environments.</p>
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="data_cache_dir" data-label="Data cache directory">
+                      <label for="data-cache-dir">Data cache directory <span class="optional">optional</span></label>
+                      <input id="data-cache-dir" name="data_cache_dir" type="text" spellcheck="false"
+                             placeholder="&lt;base-dir&gt;/floability-data-cache">
+                      <p class="hint">Overrides Floability's data-cache location.</p>
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
                 </div>
-                <div class="field" data-field="data_cache_dir" data-label="Data cache directory">
-                  <label for="data-cache-dir">Data cache directory <span class="optional">optional</span></label>
-                  <input id="data-cache-dir" name="data_cache_dir" type="text" spellcheck="false"
-                         placeholder="&lt;base-dir&gt;/floability-data-cache">
-                  <p class="hint">Overrides Floability's data-cache location.</p>
-                  <p class="field-error" aria-live="polite"></p>
-                </div>
-              </div>
+              </details>
 
-              <div class="row" data-mode-only="run">
-                <div class="field" data-field="jupyter_port" data-label="Remote Jupyter port">
-                  <label for="jupyter-port">Remote Jupyter port</label>
-                  <input id="jupyter-port" name="jupyter_port" type="number" min="1" max="65535" inputmode="numeric">
-                  <p class="field-error" aria-live="polite"></p>
+              <details class="advanced-group" data-mode-only="run">
+                <summary>
+                  <span class="advanced-group-title">Interactive session</span>
+                  <span class="advanced-group-description">Jupyter and SSH tunnel ports</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="row">
+                    <div class="field" data-field="jupyter_port" data-label="Remote Jupyter port">
+                      <label for="jupyter-port">Remote Jupyter port</label>
+                      <input id="jupyter-port" name="jupyter_port" type="number" min="1" max="65535" inputmode="numeric">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="local_port" data-label="Local port">
+                      <label for="local-port">Local port <span class="optional">optional</span></label>
+                      <input id="local-port" name="local_port" type="number" min="1" max="65535"
+                             inputmode="numeric" placeholder="automatic">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
                 </div>
-                <div class="field" data-field="local_port" data-label="Local port">
-                  <label for="local-port">Local port <span class="optional">optional</span></label>
-                  <input id="local-port" name="local_port" type="number" min="1" max="65535"
-                         inputmode="numeric" placeholder="automatic">
-                  <p class="field-error" aria-live="polite"></p>
-                </div>
-              </div>
+              </details>
             </div>
           </details>
         </fieldset>

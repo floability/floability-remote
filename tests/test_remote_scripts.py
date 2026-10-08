@@ -50,6 +50,149 @@ class RemoteScriptTests(unittest.TestCase):
         self.assertIn('"$env_prefix/bin/floability"', remote_scripts.LAUNCH_FLOABILITY)
         self.assertIn('"$mode"', remote_scripts.LAUNCH_FLOABILITY)
 
+    def test_probe_resolves_conda_shell_function_to_absolute_executable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conda = root / "bin" / "conda"
+            conda.parent.mkdir()
+            executable(
+                conda,
+                "#!/bin/sh\n"
+                "if [ \"$1 $2\" = \"info --base\" ]; then\n"
+                f"  printf '%s\\n' '{root}'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
+            wrapper = f"""
+unset CONDA_EXE
+conda() {{ "{conda}" "$@"; }}
+export -f conda
+bash -s -- floability-remote-managed ""
+"""
+            result = subprocess.run(
+                ["bash", "-c", wrapper],
+                input=remote_scripts.PROBE,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            f"__FLOABILITY_REMOTE_CONDA__={conda}",
+            result.stdout,
+        )
+
+    def test_probe_discovers_environment_without_conda_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conda = root / "bin" / "conda"
+            prefix = root / "envs" / "floability-remote-managed"
+            conda.parent.mkdir()
+            (prefix / "bin").mkdir(parents=True)
+            executable(
+                conda,
+                "#!/bin/sh\n"
+                "if [ \"$1 $2\" = \"env list\" ]; then\n"
+                f"  printf '%s  %s\\n' floability-remote-managed '{prefix}'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
+            executable(prefix / "bin" / "python", "#!/bin/sh\nprintf '0.3.1\\n'\n")
+            executable(prefix / "bin" / "floability", "#!/bin/sh\nexit 0\n")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-s",
+                    "--",
+                    "floability-remote-managed",
+                    str(conda),
+                ],
+                input=remote_scripts.PROBE,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"__FLOABILITY_REMOTE_ENV_PREFIX__={prefix}", result.stdout)
+        self.assertIn("__FLOABILITY_REMOTE_VERSION__=0.3.1", result.stdout)
+        self.assertNotIn(" run -n ", remote_scripts.PROBE)
+
+    def test_probe_discovers_unique_prefix_environment_by_basename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conda = root / "bin" / "conda"
+            prefix = root / "custom" / "floability-remote-managed"
+            conda.parent.mkdir()
+            (prefix / "bin").mkdir(parents=True)
+            executable(
+                conda,
+                "#!/bin/sh\n"
+                "if [ \"$1 $2\" = \"env list\" ]; then\n"
+                f"  printf '                       %s\\n' '{prefix}'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
+            executable(prefix / "bin" / "python", "#!/bin/sh\nprintf '0.3.1\\n'\n")
+            executable(prefix / "bin" / "floability", "#!/bin/sh\nexit 0\n")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-s",
+                    "--",
+                    "floability-remote-managed",
+                    str(conda),
+                ],
+                input=remote_scripts.PROBE,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"__FLOABILITY_REMOTE_ENV_PREFIX__={prefix}", result.stdout)
+
+    def test_probe_does_not_guess_between_duplicate_prefix_environments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conda = root / "bin" / "conda"
+            first = root / "one" / "floability-remote-managed"
+            second = root / "two" / "floability-remote-managed"
+            conda.parent.mkdir()
+            executable(
+                conda,
+                "#!/bin/sh\n"
+                "if [ \"$1 $2\" = \"env list\" ]; then\n"
+                f"  printf '                       %s\\n' '{first}'\n"
+                f"  printf '                       %s\\n' '{second}'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-s",
+                    "--",
+                    "floability-remote-managed",
+                    str(conda),
+                ],
+                input=remote_scripts.PROBE,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("__FLOABILITY_REMOTE_ENV_PREFIX__=\n", result.stdout)
+
     def test_stop_interrupts_the_launched_floability(self):
         """Run the real launch and stop scripts against a stand-in Floability.
 
@@ -71,13 +214,17 @@ class RemoteScriptTests(unittest.TestCase):
                 [
                     "bash", "-s", "--", "conda", str(prefix), str(run_dir),
                     str(backpack), "execute", "local", "8888", "",
-                    "/scratch/floability base", "/scratch/data-cache",
+                    "~", "~/data cache",
                 ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"},
+                env={
+                    **os.environ,
+                    "HOME": str(root / "home"),
+                    "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+                },
             )
             self.addCleanup(lambda: launch.poll() is None and launch.kill())
             launch.stdin.write(remote_scripts.LAUNCH_FLOABILITY)
@@ -90,8 +237,11 @@ class RemoteScriptTests(unittest.TestCase):
             recorded = (run_dir / "floability.pid").read_text().strip()
             self.assertIn(f"pid={recorded} ", started)
             self.assertIn("sigint=default", started)
-            self.assertIn("'--base-dir', '/scratch/floability base'", started)
-            self.assertIn("'--data-cache-dir', '/scratch/data-cache'", started)
+            self.assertIn(f"'--base-dir', '{root / 'home'}'", started)
+            self.assertIn(
+                f"'--data-cache-dir', '{root / 'home' / 'data cache'}'",
+                started,
+            )
 
             stop = subprocess.run(
                 ["bash", "-s", "--", str(run_dir), "INT", "10"],

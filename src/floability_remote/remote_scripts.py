@@ -10,14 +10,48 @@ case "$requested_conda" in
     "~/"*) requested_conda="$HOME/${requested_conda#\~/}" ;;
 esac
 
+resolve_conda() {
+    local candidate=$1
+    local resolved=""
+    local conda_base=""
+    [ -n "$candidate" ] || return 1
+
+    case "$candidate" in
+        "~/"*) candidate="$HOME/${candidate#\~/}" ;;
+    esac
+
+    if [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    resolved=$(command -v "$candidate" 2>/dev/null || true)
+    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+        printf '%s\n' "$resolved"
+        return 0
+    fi
+
+    # Conda is commonly a shell function. Resolve it to the stable executable
+    # underneath its base installation so later SSH commands use the same
+    # Conda even when shell initialization differs.
+    conda_base=$("$candidate" info --base 2>/dev/null | tail -n 1 || true)
+    if [ -n "$conda_base" ] && [ -x "$conda_base/bin/conda" ]; then
+        printf '%s\n' "$conda_base/bin/conda"
+        return 0
+    fi
+    return 1
+}
+
 find_conda() {
-    if [ -n "$requested_conda" ] && [ -x "$requested_conda" ]; then
-        printf '%s\n' "$requested_conda"
+    if resolve_conda "$requested_conda"; then
         return
     fi
 
-    if command -v conda >/dev/null 2>&1; then
-        command -v conda
+    if resolve_conda "${CONDA_EXE:-}"; then
+        return
+    fi
+
+    if resolve_conda conda; then
         return
     fi
 
@@ -27,8 +61,7 @@ find_conda() {
         "$HOME/mambaforge/bin/conda" \
         "$HOME/anaconda3/bin/conda" \
         "$HOME/miniconda3/bin/conda"; do
-        if [ -x "$candidate" ]; then
-            printf '%s\n' "$candidate"
+        if resolve_conda "$candidate"; then
             return
         fi
     done
@@ -39,9 +72,31 @@ env_prefix=""
 floability_version=""
 
 if [ -n "$conda_path" ]; then
-    env_prefix=$("$conda_path" run -n "$env_name" python -c \
-        'import sys; print(sys.prefix)' 2>/dev/null | tail -n 1 || true)
-    if [ -n "$env_prefix" ] && [ -x "$env_prefix/bin/floability" ]; then
+    # Resolve the named environment without `conda run`. Some HPC sites expose
+    # environments correctly through `conda env list` but `conda run` fails in
+    # a non-interactive SSH command even though it works in a login shell.
+    env_listing=$("$conda_path" env list 2>/dev/null || true)
+    env_prefix=$(printf '%s\n' "$env_listing" | awk -v target="$env_name" \
+        '$1 == target { print $NF; exit }' || true)
+    if [ -z "$env_prefix" ]; then
+        # Prefix-created environments can be displayed without a name. Accept
+        # a basename match only when it is unique; never guess between two
+        # environments with the same final directory name.
+        env_prefix=$(printf '%s\n' "$env_listing" | awk -v target="$env_name" '
+            {
+                path = $NF
+                count_parts = split(path, parts, "/")
+                if (parts[count_parts] == target) {
+                    matches += 1
+                    match_path = path
+                }
+            }
+            END { if (matches == 1) print match_path }
+        ' || true)
+    fi
+    if [ -n "$env_prefix" ] \
+        && [ -x "$env_prefix/bin/python" ] \
+        && [ -x "$env_prefix/bin/floability" ]; then
         floability_version=$("$env_prefix/bin/python" -c \
             'from importlib.metadata import version; print(version("floability"))' \
             2>/dev/null | tail -n 1 || true)
@@ -246,6 +301,17 @@ jupyter_port=$7
 entrypoint=$8
 base_dir=$9
 data_cache_dir=${10}
+
+expand_home() {
+    case "$1" in
+        "~") printf '%s\n' "$HOME" ;;
+        "~/"*) printf '%s/%s\n' "$HOME" "${1#\~/}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+base_dir=$(expand_home "$base_dir")
+data_cache_dir=$(expand_home "$data_cache_dir")
 
 case "$mode" in
     run|execute) ;;
