@@ -192,6 +192,25 @@ floability-remote execute \
   --floability-version <VERSION>
 ```
 
+## Floability storage directories
+
+Floability Remote keeps cloned backpacks and command logs under `--remote-root`.
+Floability itself separately stores instances and reusable software environments
+under its base directory. Override Floability's storage locations when a cluster
+requires a scratch or project filesystem:
+
+```bash
+floability-remote execute \
+  --target my-cluster \
+  --backpack <GITHUB_URL> \
+  --batch-type slurm \
+  --base-dir /scratch/$USER/floability \
+  --data-cache-dir /scratch/$USER/floability-data-cache
+```
+
+When omitted, Floability uses `~/floability-base-dir` and its
+`floability-data-cache` subdirectory.
+
 ## Progress and logs
 
 The default display shows concise stages without printing every Conda, Git, or

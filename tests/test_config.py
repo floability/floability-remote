@@ -81,6 +81,16 @@ class RunConfigValidationTests(unittest.TestCase):
             ["remote_root", "jupyter_port", "local_port"],
         )
 
+    def test_floability_cache_paths_reject_options_and_control_characters(self):
+        self.assertEqual(
+            fields(config(base_dir="-x", data_cache_dir="cache\nother")),
+            ["base_dir", "data_cache_dir"],
+        )
+        self.assertEqual(
+            fields(config(base_dir="~/floability base", data_cache_dir="/scratch/data")),
+            [],
+        )
+
     def test_all_issues_are_reported_together(self):
         with self.assertRaises(ConfigError) as caught:
             validate_run_config(

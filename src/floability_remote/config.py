@@ -53,6 +53,8 @@ class RunConfig:
     environment: EnvironmentConfig = field(default_factory=EnvironmentConfig)
     entrypoint: str = ""
     remote_root: str = DEFAULT_REMOTE_ROOT
+    base_dir: str = ""
+    data_cache_dir: str = ""
     jupyter_port: int = DEFAULT_JUPYTER_PORT
     local_port: Optional[int] = None
 
@@ -165,6 +167,20 @@ def run_config_issues(config: RunConfig) -> List[ValidationIssue]:
 
     if not config.remote_root.strip() or "\n" in config.remote_root:
         problem("remote_root", "must be a non-empty remote path.", "--remote-root")
+    for field, value, flag in (
+        ("base_dir", config.base_dir, "--base-dir"),
+        ("data_cache_dir", config.data_cache_dir, "--data-cache-dir"),
+    ):
+        if value and (
+            not value.strip()
+            or value.startswith("-")
+            or _has_control_characters(value)
+        ):
+            problem(
+                field,
+                "must be a remote path and cannot begin with '-' or contain control characters.",
+                flag,
+            )
     if not valid_port(config.jupyter_port):
         problem("jupyter_port", "must be between 1 and 65535.", "--jupyter-port")
     if not valid_port(config.local_port):

@@ -126,6 +126,8 @@ class CliArgumentRoundTripTests(unittest.TestCase):
             "--env-name", "custom-env",
             "--floability-version", "0.4.0",
             "--remote-root", "/scratch/runs",
+            "--base-dir", "/scratch/floability",
+            "--data-cache-dir", "/scratch/floability-data",
             "--ssh-option", "ServerAliveInterval=30",
             "--jupyter-port", "8999",
             "--local-port", "49000",

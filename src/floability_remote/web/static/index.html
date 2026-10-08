@@ -224,7 +224,25 @@
               <div class="field" data-field="remote_root" data-label="Remote run directory">
                 <label for="remote-root">Remote run directory</label>
                 <input id="remote-root" name="remote_root" type="text" spellcheck="false">
+                <p class="hint">Where Floability Remote stores clones and command logs.</p>
                 <p class="field-error" aria-live="polite"></p>
+              </div>
+
+              <div class="row">
+                <div class="field" data-field="base_dir" data-label="Floability base directory">
+                  <label for="base-dir">Floability base directory <span class="optional">optional</span></label>
+                  <input id="base-dir" name="base_dir" type="text" spellcheck="false"
+                         placeholder="~/floability-base-dir">
+                  <p class="hint">Instances and reusable software environments.</p>
+                  <p class="field-error" aria-live="polite"></p>
+                </div>
+                <div class="field" data-field="data_cache_dir" data-label="Data cache directory">
+                  <label for="data-cache-dir">Data cache directory <span class="optional">optional</span></label>
+                  <input id="data-cache-dir" name="data_cache_dir" type="text" spellcheck="false"
+                         placeholder="&lt;base-dir&gt;/floability-data-cache">
+                  <p class="hint">Overrides Floability's data-cache location.</p>
+                  <p class="field-error" aria-live="polite"></p>
+                </div>
               </div>
 
               <div class="row" data-mode-only="run">

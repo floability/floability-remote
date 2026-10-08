@@ -107,7 +107,7 @@ PROBE = RemoteProbe(
 
 
 class WorkflowTests(unittest.TestCase):
-    def arguments(self, command, verbose=False):
+    def arguments(self, command, verbose=False, *extra):
         arguments = [
             command,
             "--target",
@@ -119,6 +119,7 @@ class WorkflowTests(unittest.TestCase):
         ]
         if verbose:
             arguments.append("--verbose")
+        arguments.extend(extra)
         return build_parser().parse_args(arguments)
 
     def execute_with_fakes(self, command, output, verbose=False):
@@ -159,6 +160,36 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("execution completed successfully", output)
         self.assertIn("Remote backpack and outputs: /remote/run/backpack", output)
         self.assertNotIn("raw task output", output)
+
+    def test_floability_cache_directories_are_forwarded(self):
+        FakeSession.process_output = ""
+        FakeSession.process_status = 0
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                mock.patch("floability_remote.workflow.SSHSession", FakeSession)
+            )
+            stack.enter_context(
+                mock.patch(
+                    "floability_remote.workflow.ensure_environment", return_value=PROBE
+                )
+            )
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            workflow = cli_workflow(
+                self.arguments(
+                    "execute",
+                    False,
+                    "--base-dir",
+                    "/scratch/floability base",
+                    "--data-cache-dir",
+                    "/scratch/data-cache",
+                )
+            )
+            workflow.start()
+
+        self.assertEqual(
+            FakeSession.last_instance.started_arguments[-2:],
+            ("/scratch/floability base", "/scratch/data-cache"),
+        )
 
     def test_verbose_execute_shows_raw_output(self):
         output, _ = self.execute_with_fakes(

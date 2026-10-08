@@ -51,6 +51,8 @@ class RunRequest(StrictModel):
     environment: EnvironmentModel = Field(default_factory=EnvironmentModel)
     entrypoint: str = ""
     remote_root: str = DEFAULT_REMOTE_ROOT
+    base_dir: str = ""
+    data_cache_dir: str = ""
     jupyter_port: int = DEFAULT_JUPYTER_PORT
     local_port: Optional[int] = None
 
@@ -73,6 +75,8 @@ class RunRequest(StrictModel):
             ),
             entrypoint=self.entrypoint,
             remote_root=self.remote_root,
+            base_dir=self.base_dir,
+            data_cache_dir=self.data_cache_dir,
             jupyter_port=self.jupyter_port,
             local_port=self.local_port,
         )

@@ -244,6 +244,8 @@ mode=$5
 batch_type=$6
 jupyter_port=$7
 entrypoint=$8
+base_dir=$9
+data_cache_dir=${10}
 
 case "$mode" in
     run|execute) ;;
@@ -272,6 +274,12 @@ if [ "$mode" = run ]; then
 fi
 if [ -n "$entrypoint" ]; then
     command+=(--entrypoint "$entrypoint")
+fi
+if [ -n "$base_dir" ]; then
+    command+=(--base-dir "$base_dir")
+fi
+if [ -n "$data_cache_dir" ]; then
+    command+=(--data-cache-dir "$data_cache_dir")
 fi
 
 echo "Remote run directory: $run_dir"

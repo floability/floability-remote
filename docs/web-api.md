@@ -123,6 +123,8 @@ Request (`RunRequest`; omitted fields take CLI defaults):
   },
   "entrypoint": "",
   "remote_root": "~/.cache/floability-remote/runs",
+  "base_dir": "",
+  "data_cache_dir": "",
   "jupyter_port": 8888,
   "local_port": null
 }

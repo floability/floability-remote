@@ -121,6 +121,12 @@ has already approved it. Core business logic must request confirmation through
 a callback or interface; it must not call `input()` directly because web API
 requests cannot answer terminal prompts.
 
+`--remote-root` controls where Floability Remote keeps each cloned backpack and
+its command log. The independent Floability options `--base-dir` and
+`--data-cache-dir` control instance, software-environment, and input-data cache
+storage on the remote system. These paths are useful when a cluster requires
+large reusable data to live on a scratch or project filesystem.
+
 ## Batch systems and TaskVine
 
 The current client supports these batch-type values:

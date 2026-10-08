@@ -179,6 +179,8 @@ class RemoteWorkflow:
                     self.config.batch_type,
                     str(self.config.jupyter_port),
                     self.config.entrypoint,
+                    self.config.base_dir,
+                    self.config.data_cache_dir,
                 ),
             )
 

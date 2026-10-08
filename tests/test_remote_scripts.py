@@ -21,7 +21,7 @@ STAND_IN_FLOABILITY = f"""#!{sys.executable}
 import os, signal, sys, time
 handler = signal.getsignal(signal.SIGINT)
 state = "default" if handler is signal.default_int_handler else "ignored"
-print(f"started pid={{os.getpid()}} sigint={{state}}", flush=True)
+print(f"started pid={{os.getpid()}} sigint={{state}} args={{sys.argv[1:]}}", flush=True)
 try:
     while True:
         time.sleep(0.05)
@@ -68,8 +68,11 @@ class RemoteScriptTests(unittest.TestCase):
             (prefix / "bin" / "python").symlink_to(sys.executable)
 
             launch = subprocess.Popen(
-                ["bash", "-s", "--", "conda", str(prefix), str(run_dir), str(backpack),
-                 "execute", "local", "8888", ""],
+                [
+                    "bash", "-s", "--", "conda", str(prefix), str(run_dir),
+                    str(backpack), "execute", "local", "8888", "",
+                    "/scratch/floability base", "/scratch/data-cache",
+                ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -87,6 +90,8 @@ class RemoteScriptTests(unittest.TestCase):
             recorded = (run_dir / "floability.pid").read_text().strip()
             self.assertIn(f"pid={recorded} ", started)
             self.assertIn("sigint=default", started)
+            self.assertIn("'--base-dir', '/scratch/floability base'", started)
+            self.assertIn("'--data-cache-dir', '/scratch/data-cache'", started)
 
             stop = subprocess.run(
                 ["bash", "-s", "--", str(run_dir), "INT", "10"],

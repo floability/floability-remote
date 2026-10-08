@@ -123,6 +123,22 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_REMOTE_ROOT,
         help="Parent directory for remote runs.",
     )
+    parser.add_argument(
+        "--base-dir",
+        default="",
+        help=(
+            "Remote Floability base directory for instances and software caches; "
+            "Floability uses ~/floability-base-dir when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--data-cache-dir",
+        default="",
+        help=(
+            "Remote Floability data-cache directory; Floability uses "
+            "<base-dir>/floability-data-cache when omitted."
+        ),
+    )
     parser.add_argument("--identity-file", help="Optional local SSH private-key path.")
     parser.add_argument(
         "--ssh-option",
@@ -171,6 +187,8 @@ def config_from_args(args: argparse.Namespace) -> RunConfig:
         ),
         entrypoint=args.entrypoint,
         remote_root=args.remote_root,
+        base_dir=args.base_dir,
+        data_cache_dir=args.data_cache_dir,
         jupyter_port=args.jupyter_port,
         local_port=args.local_port,
     )
@@ -211,6 +229,8 @@ def cli_arguments(config: RunConfig) -> List[str]:
     if environment.reinstall_miniforge:
         arguments.append("--reinstall-miniforge")
     option("--remote-root", config.remote_root, DEFAULT_REMOTE_ROOT)
+    option("--base-dir", config.base_dir, "")
+    option("--data-cache-dir", config.data_cache_dir, "")
 
     if config.mode == "run":
         option("--jupyter-port", config.jupyter_port, DEFAULT_JUPYTER_PORT)

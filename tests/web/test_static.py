@@ -58,6 +58,8 @@ class FrontendBoundaryTests(unittest.TestCase):
                 "entrypoint",
                 "environment.env_name",
                 "remote_root",
+                "base_dir",
+                "data_cache_dir",
                 "jupyter_port",
                 "local_port",
             }
