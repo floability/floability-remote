@@ -17,7 +17,7 @@ For the API contract see [web-api.md](web-api.md); for Floability concepts see
 | Managed remote Floability environment | Complete |
 | Execute mode and interactive Jupyter sessions | Complete |
 | Cancellation and remote cleanup | Complete |
-| Cluster readiness checks | Complete |
+| Remote-host readiness checks | Complete |
 | Single-file result downloads | Complete |
 | Persistent run history and reconnecting after the local server exits | Planned |
 
@@ -34,7 +34,7 @@ For the API contract see [web-api.md](web-api.md); for Floability concepts see
 9. [One backend, two clients](#9-one-backend-two-clients)
 10. [Local web server security](#10-local-web-server-security)
 11. [Safe file downloads](#11-safe-file-downloads)
-12. [Cluster readiness check](#12-cluster-readiness-check)
+12. [Remote-host readiness check](#12-remote-host-readiness-check)
 13. [Testing real scripts without a cluster](#13-testing-real-scripts-without-a-cluster)
 14. [Limits and open questions](#14-limits-and-open-questions)
 
@@ -403,13 +403,15 @@ floability-remote download --target <host> --run-dir <run_dir> --list-only
 floability-remote download --target <host> --run-dir <run_dir> --file workflow/results.csv --output results.csv
 ```
 
-## 12. Cluster readiness check
+## 12. Remote-host readiness check
 
-`cluster.ClusterService` (web **Check cluster**, CLI `check-cluster`) inspects
-a login node **without changing anything**: operating system, Git, `setsid`,
-Conda, the Floability environment and version, the resolved base directory,
-free space on its filesystem, and quota information where the site exposes
-it. It reports issues instead of fixing them.
+`cluster.ClusterService` (web **Check remote host**, CLI `check-cluster`)
+inspects a login node **without changing anything**: operating system, Git,
+`setsid`, Conda, the Floability environment and version, available batch
+systems, the resolved base directory, free space on its filesystem, and quota
+information where the site exposes it. The web form disables batch systems
+whose standard client commands were not detected. The check reports issues
+instead of fixing them.
 
 ## 13. Testing real scripts without a cluster
 

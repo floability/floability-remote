@@ -276,6 +276,9 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
 .segment:hover span { color: var(--text); }
 .segment input:checked + span { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .segment input:focus-visible + span { box-shadow: 0 0 0 3px var(--focus); }
+.segment.disabled { cursor: not-allowed; }
+.segment input:disabled + span { color: var(--text-faint); opacity: .55; box-shadow: none; }
+.segment.disabled:hover span { color: var(--text-faint); }
 
 /* Advanced */
 .advanced { border-top: 1px solid var(--border); padding-top: 14px; }

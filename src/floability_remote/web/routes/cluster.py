@@ -52,5 +52,6 @@ def check_cluster(
         free_bytes=report.free_bytes,
         quota_status=report.quota_status,
         quota_summary=report.quota_summary,
+        available_batch_types=list(report.available_batch_types),
         issues=list(report.issues),
     )

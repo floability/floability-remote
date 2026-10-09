@@ -190,15 +190,18 @@ a new host key; answer `yes` or `no`). `state` becomes `connected` (with
 `remote_user` and `remote_host`) or `failed` (with ssh's `error`). A lost
 master is reported as `failed`.
 
-### Cluster readiness
+### Remote host readiness
 
 `POST /api/v1/cluster/check` performs a read-only check through the open SSH
 connection. The request supplies `target`, `env_name`, optional
 `floability_version`, optional `conda_executable`, and optional `base_dir`. The response reports the remote
 account and host, Linux architecture, Git and `setsid` availability, the
 resolved Conda environment and Floability version, the selected base directory,
-filesystem capacity and free space, and quota output when the site provides
-the standard `quota` command.
+filesystem capacity and free space, quota output when the site provides the
+standard `quota` command, and `available_batch_types`. The latter always
+includes `local`; Slurm, HTCondor, and UGE are reported when their standard
+submit, inspect, and cancel commands are all available. The web form disables
+batch systems that were not detected.
 
 The check walks upward to an existing parent before querying the filesystem;
 it does not create the base directory, install Conda, or modify the selected
@@ -332,7 +335,7 @@ The CLI terminal prints the full link, as before.
 | Key, agent, and `~/.ssh/config` auth | `ssh.SSHSession` | yes | `POST /connection` | |
 | Password, MFA, and host-key prompts | `askpass.AskPassBroker` | OpenSSH terminal prompts | `connection.prompt` + `POST /connection/prompts/{id}` | The CLI keeps OpenSSH's own terminal prompts |
 | Persistent connection | `connection.ConnectionManager` | per command | yes | The CLI connects inside each command |
-| Cluster readiness | `cluster.ClusterService` | `check-cluster` | `POST /cluster/check` | Read-only tools, environment, filesystem, and best-effort quota check |
+| Remote host readiness | `cluster.ClusterService` | `check-cluster` | `POST /cluster/check` | Read-only tools, batch systems, environment, filesystem, and best-effort quota check |
 | Extra OpenSSH `-o` options | `ConnectionConfig.ssh_options` | `--ssh-option` | not exposed | Options such as `ProxyCommand` run local commands; use `~/.ssh/config` |
 | Miniforge install confirmation | `interaction.Confirm` | prompt or `--yes` | `confirmation` event + `POST /runs/{id}/confirmations/{id}` | |
 | Execute | `workflow.RemoteWorkflow` via `runs.RunManager` | `execute` | `POST /runs` | Background run, SSE events |

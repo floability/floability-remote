@@ -433,6 +433,23 @@ case "$base_dir" in
     "~/"*) base_dir="$HOME/${base_dir#\~/}" ;;
 esac
 
+has_commands() {
+    for required_command in "$@"; do
+        command -v "$required_command" >/dev/null 2>&1 || return 1
+    done
+}
+
+available_batch_types="local"
+if has_commands sbatch squeue scancel; then
+    available_batch_types="$available_batch_types,slurm"
+fi
+if has_commands condor_submit condor_q condor_rm; then
+    available_batch_types="$available_batch_types,condor"
+fi
+if has_commands qsub qstat qdel qconf; then
+    available_batch_types="$available_batch_types,uge"
+fi
+
 # `df` needs an existing path. Walk upward without creating the requested
 # Floability base directory, which keeps this check read-only.
 storage_path=$base_dir
@@ -466,11 +483,6 @@ if command -v quota >/dev/null 2>&1; then
     if command -v timeout >/dev/null 2>&1; then
         quota_exit=0
         quota_output=$(timeout 5 quota -s 2>&1) || quota_exit=$?
-        quota_summary=$(printf '%s' "$quota_output" \
-            | head -n 8 \
-            | tr '\n\t' '  ' \
-            | tr -s ' ' \
-            | cut -c1-1000)
         if [ "$quota_exit" -eq 124 ]; then
             quota_status="timed-out"
         elif [ "$quota_exit" -ne 0 ]; then
@@ -480,6 +492,11 @@ if command -v quota >/dev/null 2>&1; then
             quota_status="not-reported"
         else
             quota_status="reported"
+            quota_summary=$(printf '%s' "$quota_output" \
+                | head -n 8 \
+                | tr '\n\t' '  ' \
+                | tr -s ' ' \
+                | cut -c1-1000)
         fi
     else
         quota_status="timeout-unavailable"
@@ -494,6 +511,7 @@ printf '__FLOABILITY_REMOTE_CLUSTER_TOTAL_BYTES__=%s\n' "$total_bytes"
 printf '__FLOABILITY_REMOTE_CLUSTER_FREE_BYTES__=%s\n' "$free_bytes"
 printf '__FLOABILITY_REMOTE_CLUSTER_QUOTA_STATUS__=%s\n' "$quota_status"
 printf '__FLOABILITY_REMOTE_CLUSTER_QUOTA_SUMMARY__=%s\n' "$quota_summary"
+printf '__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__=%s\n' "$available_batch_types"
 """
 
 

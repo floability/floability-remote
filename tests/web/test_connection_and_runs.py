@@ -121,6 +121,7 @@ class ConnectionAndRunApiTests(unittest.TestCase):
             free_bytes=750,
             quota_status="not-reported",
             quota_summary="",
+            available_batch_types=("local", "slurm"),
             issues=(),
         )
         with mock.patch(
@@ -139,6 +140,7 @@ class ConnectionAndRunApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.json()["ready"])
         self.assertEqual(response.json()["free_bytes"], 750)
+        self.assertEqual(response.json()["available_batch_types"], ["local", "slurm"])
         check.assert_called_once()
 
     def test_cluster_check_requires_matching_connection(self):

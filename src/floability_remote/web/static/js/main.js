@@ -35,6 +35,7 @@ let stopFollowing = null;
 let starting = false;
 let clusterChecking = false;
 let checkedClusterKey = null;
+let availableBatchTypes = null;
 
 // Status ------------------------------------------------------------------
 
@@ -191,6 +192,39 @@ function formatBytes(bytes) {
   return unit === "B" ? `${value} ${unit}` : `${value.toFixed(1)} ${unit}`;
 }
 
+const BATCH_LABELS = {
+  local: "Local",
+  slurm: "Slurm",
+  condor: "HTCondor",
+  uge: "UGE",
+};
+
+function setBatchAvailability(batchTypes) {
+  availableBatchTypes = batchTypes ? new Set(batchTypes) : null;
+  const inputs = [...form.querySelectorAll('input[name="batch_type"]')];
+  for (const input of inputs) {
+    const available = !availableBatchTypes || availableBatchTypes.has(input.value);
+    input.disabled = !available;
+    const label = input.closest("label");
+    label.classList.toggle("disabled", !available);
+    if (available) label.removeAttribute("aria-disabled");
+    else label.setAttribute("aria-disabled", "true");
+    label.title = available
+      ? ""
+      : `${BATCH_LABELS[input.value] || input.value} was not detected on this remote host.`;
+  }
+
+  const selected = inputs.find((input) => input.checked);
+  if (selected && selected.disabled) {
+    const fallback = inputs.find((input) => !input.disabled);
+    if (fallback) {
+      fallback.checked = true;
+      scheduleValidation();
+    }
+  }
+  updateStartControl();
+}
+
 function clusterSettings() {
   return {
     target: connection.target || form.elements.namedItem("connection.target").value.trim(),
@@ -209,7 +243,10 @@ function renderConnectionSidebar() {
   const connected = connection.state === "connected";
   document.getElementById("getting-started-card").hidden = connected;
   document.getElementById("cluster-card").hidden = !connected;
-  if (!connected) return;
+  if (!connected) {
+    setBatchAvailability(null);
+    return;
+  }
 
   const settings = clusterSettings();
   document.getElementById("cluster-account").textContent =
@@ -220,7 +257,7 @@ function renderConnectionSidebar() {
     badge.textContent = "Check needed";
     document.getElementById("cluster-environment").textContent = settings.env_name;
     document.getElementById("cluster-base-dir").textContent = settings.base_dir || "~/floability-base-dir";
-    document.getElementById("cluster-check-message").textContent = "Settings changed. Check the cluster again.";
+    document.getElementById("cluster-check-message").textContent = "Settings changed. Check the remote host again.";
   }
 }
 
@@ -235,18 +272,22 @@ function showClusterReport(report) {
   else environment += " · environment not found";
   document.getElementById("cluster-environment").textContent = environment;
   document.getElementById("cluster-base-dir").textContent = report.resolved_base_dir;
+  setBatchAvailability(report.available_batch_types);
+  document.getElementById("cluster-batch-systems").textContent = report.available_batch_types
+    .map((batchType) => BATCH_LABELS[batchType] || batchType)
+    .join(", ");
   const storage = report.free_bytes === null || report.total_bytes === null
     ? "Free space not reported"
     : `${formatBytes(report.free_bytes)} free of ${formatBytes(report.total_bytes)}`;
   const quotaLabels = {
     reported: "quota reported below",
-    "not-reported": "quota not reported by this cluster",
-    "timed-out": "quota check timed out",
-    error: "quota check unavailable",
-    unavailable: "quota command unavailable",
-    "timeout-unavailable": "safe quota check unavailable",
+    "not-reported": "quota not reported",
+    "timed-out": "quota not reported",
+    error: "quota not reported",
+    unavailable: "quota not reported",
+    "timeout-unavailable": "quota not reported",
   };
-  const quota = quotaLabels[report.quota_status] || "quota status unavailable";
+  const quota = quotaLabels[report.quota_status] || "quota not reported";
   document.getElementById("cluster-storage").textContent = `${storage}; ${quota}.`;
   const quotaDetails = document.getElementById("cluster-quota");
   quotaDetails.hidden = !report.quota_summary;
@@ -270,7 +311,8 @@ async function checkCluster() {
   button.textContent = "Checking…";
   badge.dataset.state = "checking";
   badge.textContent = "Checking";
-  document.getElementById("cluster-check-message").textContent = "Inspecting the remote environment and storage…";
+  document.getElementById("cluster-check-message").textContent = "Inspecting the remote environment, batch systems, and storage…";
+  document.getElementById("cluster-batch-systems").textContent = "Detecting…";
   try {
     const report = await api.checkCluster(settings);
     checkedClusterKey = clusterKey(settings);
@@ -278,13 +320,15 @@ async function checkCluster() {
   } catch (error) {
     badge.dataset.state = "setup";
     badge.textContent = "Check failed";
+    setBatchAvailability(null);
+    document.getElementById("cluster-batch-systems").textContent = "Could not determine.";
     handleError(error, (message) => {
       document.getElementById("cluster-check-message").textContent = message;
     });
   } finally {
     clusterChecking = false;
     button.disabled = false;
-    button.textContent = "Check cluster";
+    button.textContent = "Check remote host";
   }
 }
 
