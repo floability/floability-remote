@@ -9,7 +9,7 @@
 | M2. SSH connection screen (AskPass prompts) | Done |
 | M3. `execute` vertical slice | Done |
 | M4. Interactive Jupyter runs | Done (no idle timeout yet) |
-| M5. Run history and file transfer (upload/download) | Next; planned, not implemented |
+| M5. Run history and file transfer | In progress; single-file download done |
 | M6–M8 | Planned |
 
 The API contract, security model, event schema, and CLI/web capability matrix
@@ -189,22 +189,24 @@ remote process running; use an explicit lifecycle and idle policy.
 Success condition: a user launches an interactive backpack, opens Jupyter in
 the browser, and stops the run cleanly without entering an SSH command.
 
-### 5. Add run history and file transfer (planned, not implemented)
+### 5. Add run history and file transfer (single-file download implemented)
 
-File transfer is listed in the web UI's feature list as "Coming in M5"
-(`transfer` in `GET /api/v1/meta`). Planned scope:
+The first M5 slice is available in both clients. After a run ends, it lists
+approved regular files from the workflow, top-level instance logs, metadata,
+metrics, and the Floability Remote command log. Symbolic links and generated
+software or worker scratch directories are excluded. The web page provides a
+Download button for each file; `floability-remote download` provides the same
+inventory in the terminal. Each file is revalidated before transfer, local
+files are not overwritten, listings are limited to 2,000 files, and downloads
+to 100 MiB.
 
-- **Download** files from a run's workspace (outputs, logs, notebooks) to the
-  laptop, chosen from a browsable listing of the remote run directory.
+Remaining scope:
+
 - **Upload** files from the laptop into a run's workspace, for example input
   data or an edited notebook, before or between runs.
-- One shared transfer service used by both clients, with a CLI command (for
-  example `floability-remote download` / `upload`) and web API endpoints.
-- Transfers reuse the open SSH connection (`scp`/`sftp` over the control
-  master), so no extra sign-in is needed.
-- Every path stays inside the known run directory: reject absolute paths,
-  `..`, and symbolic links that escape it.
-- Enforce size and file-count limits, show progress, and allow cancellation.
+- Multi-file selection, archives, progress, cancellation, and large transfers.
+- Persistent local history so downloads survive a web-server restart without
+  manually supplying the remote run directory.
 - Never overwrite local or remote files without confirmation.
 
 Store non-secret local metadata for recent runs:
@@ -217,8 +219,8 @@ Store non-secret local metadata for recent runs:
 - remote run directory; and
 - local log location.
 
-Add an output manifest and explicit downloads over SFTP. Do not recursively
-download an unknown remote directory without size and file-count limits.
+Add explicit output manifests and a transfer backend suitable for large files.
+Do not recursively download an unknown remote directory without limits.
 
 Success condition: the user can reopen the local UI, inspect previous run
 records, reconnect when necessary, and download selected outputs.

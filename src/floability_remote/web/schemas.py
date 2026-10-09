@@ -144,12 +144,16 @@ class ConnectRequest(StrictModel):
     identity_file: Optional[str] = None
 
     def to_config(self) -> ConnectionConfig:
-        return ConnectionConfig(target=self.target, identity_file=self.identity_file or None)
+        return ConnectionConfig(
+            target=self.target, identity_file=self.identity_file or None
+        )
 
 
 class PromptModel(BaseModel):
     id: str
-    kind: str = Field(description="`secret` (hidden text answer) or `confirm` (yes/no).")
+    kind: str = Field(
+        description="`secret` (hidden text answer) or `confirm` (yes/no)."
+    )
     message: str
 
 
@@ -211,6 +215,22 @@ class RunResponse(BaseModel):
 
 class ConfirmationAnswer(StrictModel):
     approved: bool
+
+
+class RemoteFileModel(BaseModel):
+    id: str
+    group: str
+    path: str
+    size: int
+    downloadable: bool
+    reason: Optional[str] = None
+
+
+class FileListResponse(BaseModel):
+    run_id: str
+    instance_found: bool
+    truncated: bool
+    files: List[RemoteFileModel]
 
 
 class ErrorBody(BaseModel):

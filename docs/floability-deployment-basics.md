@@ -204,9 +204,10 @@ Every invocation currently retains:
 └── .floability-remote-run
 ```
 
-Automatic output download is not implemented. A future download API should
-operate inside the known workspace or run directory, reject path traversal, and
-apply file-count and size limits.
+The CLI and web API can list and download individual retained workflow, log,
+metadata, and metrics files. They exclude symlinks and generated runtime
+infrastructure and apply file-count and size limits. Automatic, multi-file, and
+large-result transfers are not implemented yet.
 
 ## Shared implementation requirements
 

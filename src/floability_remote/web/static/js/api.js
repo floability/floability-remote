@@ -69,6 +69,9 @@ export const api = {
   startRun: (config) => request("POST", "/runs", config),
   currentRun: () => request("GET", "/runs/current"),
   run: (runId) => request("GET", `/runs/${segment(runId)}`),
+  runFiles: (runId) => request("GET", `/runs/${segment(runId)}/files`),
+  downloadUrl: (runId, fileId) =>
+    `${API_PREFIX}/runs/${segment(runId)}/files/${segment(fileId)}/download`,
   cancelRun: (runId) => request("POST", `/runs/${segment(runId)}/cancel`),
   answerConfirmation: (runId, confirmationId, approved) =>
     request("POST", `/runs/${segment(runId)}/confirmations/${segment(confirmationId)}`, { approved }),

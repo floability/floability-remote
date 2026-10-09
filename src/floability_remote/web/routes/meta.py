@@ -35,9 +35,9 @@ FEATURES = {
         description="Start an interactive backpack and open Jupyter.",
     ),
     "transfer": FeatureModel(
-        available=False,
+        available=True,
         milestone="M5",
-        description="Upload files to and download results from the remote workspace.",
+        description="Download individual files retained by completed runs.",
     ),
 }
 

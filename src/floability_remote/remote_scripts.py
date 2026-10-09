@@ -424,6 +424,218 @@ echo "Remote Floability process stopped."
 """
 
 
+LIST_DOWNLOAD_FILES = r"""
+set -euo pipefail
+
+run_dir=$1
+case "$run_dir" in
+    "~") run_dir="$HOME" ;;
+    "~/"*) run_dir="$HOME/${run_dir#\~/}" ;;
+esac
+
+find_python() {
+    local candidate
+    local recorded_python=""
+    for candidate in "$run_dir/execute-command.log" "$run_dir/run-command.log"; do
+        if [ -f "$candidate" ] && [ ! -L "$candidate" ]; then
+            recorded_python=$(awk '
+                sub(/^[[:space:]]*Python executable:[[:space:]]*/, "") {
+                    print
+                    exit
+                }
+            ' "$candidate")
+            [ -n "$recorded_python" ] && break
+        fi
+    done
+    for candidate in \
+        "$recorded_python" \
+        "$(command -v python3 2>/dev/null || true)" \
+        "$(command -v python 2>/dev/null || true)" \
+        "$HOME/.local/share/floability-remote/miniforge/bin/python" \
+        "$HOME/miniforge3/bin/python" \
+        "$HOME/miniconda3/bin/python"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+python_path=$(find_python) || {
+    echo "Python was not found on the remote system." >&2
+    exit 3
+}
+
+"$python_path" - "$run_dir" <<'PY'
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+run_dir = Path(sys.argv[1]).expanduser()
+marker_file = run_dir / ".floability-remote-run"
+if not run_dir.is_dir() or not marker_file.is_file() or marker_file.is_symlink():
+    raise SystemExit("The path is not a Floability Remote run directory.")
+
+limit = 2000
+files = []
+truncated = False
+
+
+def add(group, logical_path, path):
+    global truncated
+    if len(files) >= limit:
+        truncated = True
+        return
+    if any(ord(character) < 32 for character in logical_path):
+        return
+    try:
+        information = path.lstat()
+    except OSError:
+        return
+    if not stat.S_ISREG(information.st_mode) or path.is_symlink():
+        return
+    files.append(
+        {
+            "group": group,
+            "path": logical_path,
+            "remote_path": str(path),
+            "size": information.st_size,
+        }
+    )
+
+
+def add_tree(group, root, logical_root):
+    global truncated
+    if not root.is_dir() or root.is_symlink():
+        return
+    for current, directories, names in os.walk(root, followlinks=False):
+        current_path = Path(current)
+        directories[:] = sorted(
+            name
+            for name in directories
+            if name not in {"vine-run-info", ".ipynb_checkpoints"}
+            and not (current_path / name).is_symlink()
+        )
+        for name in sorted(names):
+            path = current_path / name
+            relative = path.relative_to(root).as_posix()
+            add(group, f"{logical_root}/{relative}", path)
+            if truncated:
+                return
+
+
+command_logs = []
+for name in ("execute-command.log", "run-command.log"):
+    path = run_dir / name
+    try:
+        if stat.S_ISREG(path.lstat().st_mode) and not path.is_symlink():
+            command_logs.append(path)
+            add("command", name, path)
+    except OSError:
+        pass
+
+instance_dir = None
+instance_marker = "[floability] Created instance structure at:"
+for command_log in command_logs:
+    try:
+        with command_log.open("r", encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                if instance_marker in line:
+                    candidate = line.split(instance_marker, 1)[1].strip()
+                    path = Path(candidate).expanduser()
+                    if path.is_absolute() and path.is_dir() and not path.is_symlink():
+                        instance_dir = path
+                    break
+    except OSError:
+        continue
+    if instance_dir is not None:
+        break
+
+if instance_dir is not None and not truncated:
+    add_tree("workflow", instance_dir / "workflow", "workflow")
+
+if instance_dir is not None and not truncated:
+    logs = instance_dir / "logs"
+    if logs.is_dir() and not logs.is_symlink():
+        for path in sorted(logs.iterdir(), key=lambda item: item.name):
+            add("logs", f"logs/{path.name}", path)
+            if truncated:
+                break
+
+if instance_dir is not None and not truncated:
+    add("records", "catalog_update.json", instance_dir / "catalog_update.json")
+    add_tree("records", instance_dir / "metadata", "metadata")
+    if not truncated:
+        add_tree("records", instance_dir / "metrics", "metrics")
+
+files.sort(key=lambda item: (item["group"], item["path"]))
+payload = {
+    "python_path": sys.executable,
+    "instance_found": instance_dir is not None,
+    "truncated": truncated,
+    "files": files,
+}
+print("__FLOABILITY_REMOTE_FILES__=" + json.dumps(payload, ensure_ascii=True))
+PY
+"""
+
+
+DOWNLOAD_FILE = r"""
+set -euo pipefail
+
+remote_path=$1
+maximum_size=$2
+python_path=$3
+
+if [ ! -x "$python_path" ]; then
+    echo "The Python executable used for file validation is unavailable." >&2
+    exit 3
+fi
+
+"$python_path" - "$remote_path" "$maximum_size" <<'PY'
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+maximum_size = int(sys.argv[2])
+flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+
+try:
+    descriptor = os.open(path, flags)
+except OSError as error:
+    raise SystemExit(f"Could not open the selected file: {error}")
+
+try:
+    information = os.fstat(descriptor)
+    if not stat.S_ISREG(information.st_mode):
+        raise SystemExit("The selected path is no longer a regular file.")
+    if information.st_size > maximum_size:
+        raise SystemExit(
+            f"The selected file is {information.st_size} bytes; "
+            f"the limit is {maximum_size} bytes."
+        )
+
+    remaining = maximum_size + 1
+    output = sys.stdout.buffer
+    while remaining:
+        chunk = os.read(descriptor, min(1024 * 1024, remaining))
+        if not chunk:
+            break
+        output.write(chunk)
+        remaining -= len(chunk)
+    output.flush()
+    if remaining == 0 and os.read(descriptor, 1):
+        raise SystemExit("The selected file grew beyond the download limit.")
+finally:
+    os.close(descriptor)
+PY
+"""
+
+
 IDENTIFY = r"""
 set -u
 
@@ -440,4 +652,6 @@ ALL = (
     CLONE_BACKPACK,
     LAUNCH_FLOABILITY,
     STOP_FLOABILITY,
+    LIST_DOWNLOAD_FILES,
+    DOWNLOAD_FILE,
 )

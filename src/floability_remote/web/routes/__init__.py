@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from . import connection, health, meta, runs
+from . import connection, files, health, meta, runs
 
 
 api_router = APIRouter()
@@ -10,3 +10,4 @@ api_router.include_router(health.router)
 api_router.include_router(meta.router)
 api_router.include_router(connection.router)
 api_router.include_router(runs.router)
+api_router.include_router(files.router)

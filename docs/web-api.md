@@ -203,6 +203,8 @@ and closes the connection.
 | `GET /api/v1/runs/current` | The active or most recent run; `404` if none. |
 | `GET /api/v1/runs/{id}` | Run state, result paths, Jupyter link, and any pending `confirmation`. |
 | `GET /api/v1/runs/{id}/events` | Server-Sent Events (below). |
+| `GET /api/v1/runs/{id}/files` | Approved regular files retained by a finished run. Requires the matching SSH connection. |
+| `GET /api/v1/runs/{id}/files/{file_id}/download` | Revalidate and download one listed file. |
 | `POST /api/v1/runs/{id}/cancel` | `202`; cancels an execution or stops an interactive session. Cleanup progress arrives as events. |
 | `POST /api/v1/runs/{id}/confirmations/{id}` | `{"approved": true}` → `204`. |
 
@@ -236,6 +238,28 @@ Lifecycle: the session belongs to the web server, not the browser tab.
 Closing the tab leaves Jupyter running so it can still be used in its own tab;
 reopening the page shows the link again. Stopping the server stops the
 session. There is no idle timeout yet.
+
+#### Retained files
+
+`GET /runs/{id}/files` is available after the run reaches a terminal state. It
+returns `instance_found`, `truncated`, and file records containing `id`,
+`group`, `path`, `size`, `downloadable`, and an optional `reason`. Groups are
+`command`, `workflow`, `logs`, and `records`.
+
+The inventory includes the Floability Remote command log, regular workflow
+files, direct children of the instance log directory, `catalog_update.json`,
+and regular metadata and metrics files. It does not follow or expose symbolic
+links, environments, data caches, `pyuser`, or `vine_factory_scratch`.
+Workflow `vine-run-info` and `.ipynb_checkpoints` directories are also omitted.
+Downloads use the opaque `id` returned by the inventory and re-run discovery
+before opening the file with no-follow protection. The first version limits an
+inventory to 2,000 files and each download to 100 MiB.
+
+The web server reuses its open SSH master. The standalone CLI equivalent is:
+
+```bash
+floability-remote download --target <USER@HOST> --run-dir <REMOTE_RUN_DIR>
+```
 
 The event stream replays every event, then follows new ones:
 
@@ -295,7 +319,8 @@ The CLI terminal prints the full link, as before.
 | Cancel and clean up | `RemoteWorkflow.cancel`, `CancelToken` | Ctrl+C | `POST /runs/{id}/cancel` | Same SIGINT→SIGTERM cleanup |
 | Interactive Jupyter and tunnel | `RemoteWorkflow` | `run` | `POST /runs` with `mode: run` | `ready` event and `jupyter_url` carry the clickable link; stop with `/cancel` |
 | Run history | — | — | later | SQLite, non-secret metadata only |
-| File transfer (upload and download) | planned shared transfer service | planned | planned (M5); `transfer` feature is `available: false` | Over the open SSH connection; paths confined to the run directory; size and file-count limits |
+| Single-file download | `files.FileService` | `download` | `GET /runs/{id}/files` and `/download` | Shared inventory, symlink exclusion, size and file-count limits |
+| Upload and large/multi-file transfer | — | later | later | Planned after the single-file path is proven |
 | Concurrent runs | — | one per process | one active run | Deferred until lifecycle handling is reliable |
 
 Known limitations:

@@ -84,9 +84,28 @@ floability-remote execute \
   --entrypoint <WORKFLOW_FILENAME>
 ```
 
-After execution, the client prints the remote backpack directory containing
-the synchronized workflow and generated outputs. Automatic output download is
-planned but not implemented yet.
+After execution, the client prints the retained remote run directory. Use it
+to list and download one result or log file:
+
+```bash
+floability-remote download \
+  --target <USER@LOGIN_NODE> \
+  --run-dir <REMOTE_RUN_DIRECTORY>
+```
+
+The command opens one SSH connection, groups the available files, and asks
+which one to save. For scripts, select a logical path and destination directly:
+
+```bash
+floability-remote download \
+  --target <USER@LOGIN_NODE> \
+  --run-dir <REMOTE_RUN_DIRECTORY> \
+  --file workflow/results.csv \
+  --output ./results.csv
+```
+
+Use `--list-only` to inspect files without downloading. Existing local files
+are never overwritten.
 
 ### Web interface (preview)
 
@@ -104,11 +123,13 @@ From the browser you can:
 
 - connect to a login node; passwords, MFA codes, and new host keys are asked
   in the page (OpenSSH 8.4 or newer) and never stored;
-- validate a configuration and copy the equivalent CLI command; and
+- validate a configuration and copy the equivalent CLI command;
 - execute a backpack, follow its progress and full log, approve a Miniforge
-  installation, and cancel with remote cleanup; and
+  installation, and cancel with remote cleanup;
 - start an interactive run and open JupyterLab from the **Open JupyterLab**
-  link once the SSH tunnel is ready, then stop the session from the page.
+  link once the SSH tunnel is ready, then stop the session from the page; and
+- download individual workflow, log, metadata, and metrics files after a run
+  finishes.
 
 Runs and Jupyter sessions continue if you close the tab; reopening the page
 shows them again. Stopping the server with Ctrl+C stops an active run or
@@ -266,6 +287,24 @@ The directory contains the cloned backpack and `run-command.log` or
 `execute-command.log`. It is retained after completion so results are not
 destroyed.
 
+## Downloadable files
+
+The CLI and web interface use the same file-inventory and transfer service.
+For a finished run they expose:
+
+- `run-command.log` or `execute-command.log`;
+- regular files under the Floability instance's `workflow/`;
+- regular files directly under `logs/`;
+- `catalog_update.json`; and
+- regular files under `metadata/` and `metrics/`.
+
+The instance directory is read from Floability's creation message in the
+command log. Symbolic links, `pyuser/`, `vine_factory_scratch/`,
+`vine-run-info/`, `.ipynb_checkpoints/`, environments, data caches,
+directories, and special files are never offered. A listing is limited to
+2,000 files, and an individual download to 100 MiB. Larger and multi-file
+transfers are deferred to a later version.
+
 ## Remote requirements
 
 - Linux;
@@ -285,6 +324,7 @@ src/
     ├── cli_reporter.py     terminal rendering of workflow events
     ├── config.py           typed run configuration and validation
     ├── events.py           structured events, sinks, and secret redaction
+    ├── files.py            safe retained-file inventory and download service
     ├── interaction.py      confirmation callbacks and cancellation
     ├── askpass.py          relay of SSH prompts to a client (web sign-in)
     ├── connection.py       long-lived SSH connection for the web interface
@@ -327,7 +367,8 @@ factories, and batch jobs have stopped.
 
 ## Current limitations
 
-- Outputs are retained remotely but are not downloaded automatically yet.
+- Individual retained files can be downloaded explicitly; automatic,
+  multi-file, and large-result transfers are not implemented yet.
 - Interactive mode parses Floability's current human-readable Jupyter output.
 - Jupyter is expected to run on the login node where Floability is launched.
 - Detached sessions and reconnecting to an existing run are not supported.

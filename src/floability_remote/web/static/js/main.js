@@ -230,6 +230,7 @@ async function answerPrompt(promptId, answer) {
 // Runs --------------------------------------------------------------------
 
 const runPanel = new RunPanel({
+  downloadUrl: api.downloadUrl,
   onCancel: async (runId) => {
     try {
       await api.cancelRun(runId);
@@ -287,9 +288,22 @@ function follow(run, { restored = false } = {}) {
       stopFollowing = null;
       updateStartControl();
       refreshConnection();
+      loadRunFiles(run.id);
     },
   });
   updateStartControl();
+}
+
+async function loadRunFiles(runId) {
+  if (!runPanel.run || runPanel.run.id !== runId) return;
+  runPanel.loadingFiles();
+  try {
+    const inventory = await api.runFiles(runId);
+    if (runPanel.run && runPanel.run.id === runId) runPanel.showFiles(inventory);
+  } catch (error) {
+    if (!runPanel.run || runPanel.run.id !== runId) return;
+    handleError(error, (message) => runPanel.showFilesError(message));
+  }
 }
 
 async function startRun() {

@@ -214,6 +214,40 @@ class SSHSession:
         process.stdin.close()
         return process
 
+    def run_script_to_file(
+        self,
+        script: str,
+        arguments: Sequence[str],
+        destination: Path,
+    ) -> None:
+        """Run a remote Bash program and write its binary stdout to `destination`.
+
+        Transfer scripts must reserve stdout for file bytes and write diagnostics
+        to stderr. A failed transfer removes the incomplete local file.
+        """
+        remote_command = shell_command("bash", ("-s", "--", *arguments))
+        try:
+            with destination.open("xb") as output:
+                result = subprocess.run(
+                    [*self._base(), self.target, remote_command],
+                    input=script,
+                    text=True,
+                    stdout=output,
+                    stderr=subprocess.PIPE,
+                    start_new_session=self.promptless,
+                    check=False,
+                )
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
+        if result.returncode != 0:
+            destination.unlink(missing_ok=True)
+            detail = (result.stderr or "").strip()
+            suffix = f"\n{detail}" if detail else ""
+            raise RemoteRunError(
+                f"Remote file download failed with status {result.returncode}.{suffix}"
+            )
+
     def start_tunnel(self, local_port: int, remote_port: int) -> subprocess.Popen:
         forwarding = f"127.0.0.1:{local_port}:127.0.0.1:{remote_port}"
         process = subprocess.Popen(
@@ -288,4 +322,3 @@ class SSHSession:
             Path(self.control_path).unlink(missing_ok=True)
         except OSError:
             pass
-

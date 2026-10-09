@@ -26,12 +26,13 @@ class SystemEndpointTests(unittest.TestCase):
         self.assertEqual(meta["defaults"]["env_name"], "floability-remote-managed")
         for available in ("validate", "connect", "execute", "cancel", "run"):
             self.assertTrue(meta["features"][available]["available"], available)
-        self.assertFalse(meta["features"]["transfer"]["available"])
+        self.assertTrue(meta["features"]["transfer"]["available"])
         self.assertEqual(meta["features"]["transfer"]["milestone"], "M5")
 
     def test_openapi_is_versioned(self):
         schema = self.client.get("/api/v1/openapi.json").json()
         self.assertIn("/api/v1/runs/validate", schema["paths"])
+        self.assertIn("/api/v1/runs/{run_id}/files", schema["paths"])
         self.assertEqual(self.client.get("/docs").status_code, 404)
 
     def test_unknown_route_uses_error_envelope(self):
@@ -143,37 +144,66 @@ class CliArgumentRoundTripTests(unittest.TestCase):
 
     def test_minimal_execute(self):
         self.round_trip(
-            "execute", "--target", "h", "--backpack", "https://x/y.git", "--batch-type", "local"
+            "execute",
+            "--target",
+            "h",
+            "--backpack",
+            "https://x/y.git",
+            "--batch-type",
+            "local",
         )
 
     def test_every_option(self):
         self.round_trip(
             "run",
-            "--target", "user@h",
-            "--backpack", "https://x/y.git",
-            "--batch-type", "condor",
-            "--ref", "v1.2",
-            "--entrypoint", "main.ipynb",
-            "--env-name", "custom-env",
-            "--floability-version", "0.4.0",
-            "--remote-root", "/scratch/runs",
-            "--base-dir", "/scratch/floability",
-            "--data-cache-dir", "/scratch/floability-data",
-            "--ssh-option", "ServerAliveInterval=30",
-            "--jupyter-port", "8999",
-            "--local-port", "49000",
+            "--target",
+            "user@h",
+            "--backpack",
+            "https://x/y.git",
+            "--batch-type",
+            "condor",
+            "--ref",
+            "v1.2",
+            "--entrypoint",
+            "main.ipynb",
+            "--env-name",
+            "custom-env",
+            "--floability-version",
+            "0.4.0",
+            "--remote-root",
+            "/scratch/runs",
+            "--base-dir",
+            "/scratch/floability",
+            "--data-cache-dir",
+            "/scratch/floability-data",
+            "--ssh-option",
+            "ServerAliveInterval=30",
+            "--jupyter-port",
+            "8999",
+            "--local-port",
+            "49000",
             "--reinstall-miniforge",
-            "--floability-option", "workers=2",
-            "--floability-option", "label=two words",
-            "--floability-option", "verbose",
+            "--floability-option",
+            "workers=2",
+            "--floability-option",
+            "label=two words",
+            "--floability-option",
+            "verbose",
         )
 
     def test_quoting(self):
         config = validate_args(
             build_parser().parse_args(
                 [
-                    "execute", "--target", "h", "--backpack", "https://x/y.git",
-                    "--batch-type", "local", "--remote-root", "~/my runs",
+                    "execute",
+                    "--target",
+                    "h",
+                    "--backpack",
+                    "https://x/y.git",
+                    "--batch-type",
+                    "local",
+                    "--remote-root",
+                    "~/my runs",
                 ]
             )
         )

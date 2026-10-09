@@ -7,7 +7,9 @@ from floability_remote.cli import build_parser
 from .support import make_client, requires_web
 
 
-STATIC = Path(__file__).resolve().parents[2] / "src" / "floability_remote" / "web" / "static"
+STATIC = (
+    Path(__file__).resolve().parents[2] / "src" / "floability_remote" / "web" / "static"
+)
 
 
 @requires_web
@@ -69,12 +71,25 @@ class FrontendBoundaryTests(unittest.TestCase):
     def test_advanced_options_are_grouped(self):
         html = (STATIC / "index.html").read_text()
         self.assertEqual(html.count('class="advanced-group"'), 4)
-        for title in ("Remote environment", "Storage", "Floability options", "Interactive session"):
+        for title in (
+            "Remote environment",
+            "Storage",
+            "Floability options",
+            "Interactive session",
+        ):
             self.assertIn(title, html)
 
     def test_hidden_mode_fields_are_disabled(self):
         source = (STATIC / "js" / "form.js").read_text()
         self.assertIn("control.disabled = !visible", source)
+
+    def test_completed_run_panel_has_download_area(self):
+        html = (STATIC / "index.html").read_text()
+        self.assertIn('id="run-files"', html)
+        source = (STATIC / "js" / "run.js").read_text()
+        for group in ("Run command", "Workflow and results", "Logs", "Run records"):
+            self.assertIn(group, source)
+        self.assertNotIn("section.open = true", source)
 
 
 class WebCommandParserTests(unittest.TestCase):

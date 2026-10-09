@@ -21,6 +21,25 @@ const RESULT_LABELS = {
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
+const FILE_GROUPS = {
+  command: "Run command",
+  workflow: "Workflow and results",
+  logs: "Logs",
+  records: "Run records",
+};
+
+function formatSize(bytes) {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = units[0];
+  for (const candidate of units) {
+    unit = candidate;
+    if (value < 1024 || candidate === units.at(-1)) break;
+    value /= 1024;
+  }
+  return unit === "B" ? `${value} ${unit}` : `${value.toFixed(1)} ${unit}`;
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -29,7 +48,7 @@ function element(tag, className, text) {
 }
 
 export class RunPanel {
-  constructor({ onCancel, onConfirm, onNewRun }) {
+  constructor({ onCancel, onConfirm, onNewRun, downloadUrl }) {
     this.panel = document.getElementById("run-panel");
     this.summary = document.getElementById("run-summary");
     this.badge = document.getElementById("run-state");
@@ -42,6 +61,10 @@ export class RunPanel {
     this.title = document.getElementById("run-title");
     this.message = document.getElementById("run-message");
     this.result = document.getElementById("run-result");
+    this.files = document.getElementById("run-files");
+    this.filesSummary = document.getElementById("run-files-summary");
+    this.filesStatus = document.getElementById("run-files-status");
+    this.fileGroups = document.getElementById("run-file-groups");
     this.log = document.getElementById("run-log");
     this.logCount = document.getElementById("log-count");
     this.cancelButton = document.getElementById("cancel-run");
@@ -74,6 +97,7 @@ export class RunPanel {
     document.getElementById("confirmation-approve").addEventListener("click", () => this.answer(true));
     document.getElementById("confirmation-decline").addEventListener("click", () => this.answer(false));
     this.onConfirm = onConfirm;
+    this.downloadUrl = downloadUrl;
   }
 
   get active() {
@@ -107,6 +131,10 @@ export class RunPanel {
     this.logCount.textContent = "";
     this.result.replaceChildren();
     this.result.hidden = true;
+    this.files.hidden = true;
+    this.filesSummary.textContent = "";
+    this.filesStatus.textContent = "";
+    this.fileGroups.replaceChildren();
     this.message.hidden = true;
     this.ready.hidden = true;
     this.confirmation.hidden = true;
@@ -226,6 +254,61 @@ export class RunPanel {
     if (!this.pendingConfirmation) return;
     for (const button of this.confirmation.querySelectorAll("button")) button.disabled = true;
     this.onConfirm(this.run.id, this.pendingConfirmation, approved);
+  }
+
+  loadingFiles() {
+    this.files.hidden = false;
+    this.filesSummary.textContent = "";
+    this.filesStatus.textContent = "Checking retained files…";
+    this.fileGroups.replaceChildren();
+  }
+
+  showFiles(inventory) {
+    this.files.hidden = false;
+    this.filesStatus.textContent = "";
+    this.fileGroups.replaceChildren();
+    this.filesSummary.textContent = `${inventory.files.length} ${inventory.files.length === 1 ? "file" : "files"}`;
+
+    for (const [group, label] of Object.entries(FILE_GROUPS)) {
+      const files = inventory.files.filter((file) => file.group === group);
+      if (!files.length) continue;
+      const section = element("details", "run-file-group");
+      const summary = element("summary", "");
+      summary.append(element("span", "", label), element("span", "file-count", String(files.length)));
+      const list = element("ul", "run-file-list");
+      for (const file of files) {
+        const row = element("li", "run-file-row");
+        const description = element("div", "run-file-description");
+        description.append(
+          element("code", "run-file-path", file.path),
+          element("span", "run-file-size", formatSize(file.size)),
+        );
+        if (file.downloadable) {
+          const link = element("a", "button secondary small", "Download");
+          link.href = this.downloadUrl(this.run.id, file.id);
+          link.setAttribute("download", "");
+          row.append(description, link);
+        } else {
+          row.append(description, element("span", "run-file-unavailable", file.reason));
+        }
+        list.append(row);
+      }
+      section.append(summary, list);
+      this.fileGroups.append(section);
+    }
+
+    const notes = [];
+    if (!inventory.files.length) notes.push("No downloadable files were found.");
+    if (!inventory.instance_found) notes.push("No Floability instance was reported; only command logs are available.");
+    if (inventory.truncated) notes.push("The list was limited to 2,000 files.");
+    this.filesStatus.textContent = notes.join(" ");
+  }
+
+  showFilesError(message) {
+    this.files.hidden = false;
+    this.filesSummary.textContent = "Unavailable";
+    this.filesStatus.textContent = message;
+    this.fileGroups.replaceChildren();
   }
 
   finish(event) {

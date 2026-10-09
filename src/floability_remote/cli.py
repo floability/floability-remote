@@ -3,6 +3,7 @@
 import argparse
 import shlex
 import sys
+from pathlib import Path
 from typing import List, Optional, Sequence
 
 from . import __version__
@@ -19,9 +20,19 @@ from .config import (
     RunConfig,
     parse_floability_option,
     validate_run_config,
+    validate_connection,
 )
 from .errors import RemoteRunError
+from .files import (
+    GROUP_LABELS,
+    GROUP_ORDER,
+    FileInventory,
+    FileService,
+    format_size,
+    select_file,
+)
 from .interaction import INSTALL_MINIFORGE, Confirm, ConfirmationRequest
+from .ssh import SSHSession
 from .workflow import RemoteWorkflow
 
 
@@ -77,6 +88,45 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the sign-in link without opening a browser.",
     )
+
+    download_parser = commands.add_parser(
+        "download", help="List and download files retained by a remote run."
+    )
+    download_parser.add_argument(
+        "--target",
+        required=True,
+        help="OpenSSH alias, hostname, or user@host for the remote login node.",
+    )
+    download_parser.add_argument(
+        "--run-dir",
+        required=True,
+        help="Remote run directory reported after execution.",
+    )
+    download_parser.add_argument(
+        "--file",
+        default="",
+        help="Logical path or file ID; omit to select interactively.",
+    )
+    download_parser.add_argument(
+        "--output",
+        default="",
+        help="Local filename or directory (default: current directory).",
+    )
+    download_parser.add_argument(
+        "--list-only",
+        action="store_true",
+        help="List available files without downloading.",
+    )
+    download_parser.add_argument(
+        "--identity-file", help="Optional local SSH private-key path."
+    )
+    download_parser.add_argument(
+        "--ssh-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Additional OpenSSH -o option; repeat when needed.",
+    )
     return parser
 
 
@@ -89,10 +139,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--backpack", required=True, help="Public Git repository URL to clone."
     )
+    parser.add_argument("--batch-type", required=True, choices=SUPPORTED_BATCH_TYPES)
     parser.add_argument(
-        "--batch-type", required=True, choices=SUPPORTED_BATCH_TYPES
+        "--ref", default="", help="Optional Git branch, tag, or commit."
     )
-    parser.add_argument("--ref", default="", help="Optional Git branch, tag, or commit.")
     parser.add_argument(
         "--entrypoint",
         default="",
@@ -203,7 +253,8 @@ def config_from_args(args: argparse.Namespace) -> RunConfig:
         jupyter_port=args.jupyter_port,
         local_port=args.local_port,
         floability_options=tuple(
-            parse_floability_option(*raw.split("=", 1)) for raw in args.floability_option
+            parse_floability_option(*raw.split("=", 1))
+            for raw in args.floability_option
         ),
     )
 
@@ -291,11 +342,104 @@ def run_web(args: argparse.Namespace) -> int:
     return serve(port=args.port, open_browser=not args.no_browser)
 
 
+def print_inventory(inventory: FileInventory) -> List:
+    """Print grouped files and return downloadable files in displayed order."""
+    selectable = []
+    number = 1
+    if not inventory.files:
+        print("\nNo downloadable files were found.")
+    for group in GROUP_ORDER:
+        items = [item for item in inventory.files if item.group == group]
+        if not items:
+            continue
+        print(f"\n{GROUP_LABELS[group]}")
+        for item in items:
+            if item.downloadable:
+                print(f"  {number:>3}. {item.path}  ({format_size(item.size)})")
+                selectable.append(item)
+                number += 1
+            else:
+                print(f"    - {item.path}  ({format_size(item.size)}; {item.reason})")
+    if not inventory.instance_found:
+        print(
+            "\nThe run did not report a Floability instance; only command logs are shown."
+        )
+    if inventory.truncated:
+        print("\nWarning: the remote file list was limited to 2,000 files.")
+    return selectable
+
+
+def _select_file(files: List):
+    if not files:
+        raise RemoteRunError("This run has no files within the download limit.")
+    if not sys.stdin.isatty():
+        raise RemoteRunError(
+            "Interactive selection requires a terminal; use --file with a listed path."
+        )
+    answer = input(f"\nSelect a file to download [1-{len(files)}]: ").strip()
+    try:
+        index = int(answer)
+    except ValueError as error:
+        raise RemoteRunError("File selection must be a number.") from error
+    if not 1 <= index <= len(files):
+        raise RemoteRunError(f"File selection must be between 1 and {len(files)}.")
+    return files[index - 1]
+
+
+def _download_destination(raw: str, filename: str) -> Path:
+    destination = Path(raw).expanduser() if raw else Path.cwd()
+    if destination.is_dir():
+        destination = destination / filename
+    return destination
+
+
+def run_download(args: argparse.Namespace) -> int:
+    if (
+        not args.run_dir.strip()
+        or args.run_dir.startswith("-")
+        or any(ord(character) < 32 for character in args.run_dir)
+    ):
+        raise RemoteRunError("--run-dir must be a non-empty remote path.")
+    connection = validate_connection(
+        ConnectionConfig(
+            target=args.target,
+            identity_file=args.identity_file,
+            ssh_options=tuple(args.ssh_option),
+        )
+    )
+    session = SSHSession(
+        connection.target,
+        identity_file=connection.identity_file,
+        ssh_options=connection.ssh_options,
+    )
+    try:
+        print(f"[remote] Connecting to {connection.target}...")
+        session.start()
+        service = FileService(session)
+        inventory = service.list_files(args.run_dir)
+        selectable = print_inventory(inventory)
+        if args.list_only:
+            return 0
+
+        if args.file:
+            item = select_file(inventory, args.file)
+        else:
+            item = _select_file(selectable)
+        destination = _download_destination(args.output, item.filename)
+        service.download(args.run_dir, item.id, destination)
+        print(f"\nDownloaded {item.path} to {destination}")
+        return 0
+    finally:
+        session.close()
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "web":
             return run_web(args)
+        if args.command == "download":
+            return run_download(args)
         config = validate_args(args)
         workflow = RemoteWorkflow(
             config,
