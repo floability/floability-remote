@@ -6,7 +6,9 @@ browser without being stored, how long the connection lives, how Jupyter is
 reached without a manual SSH tunnel, and how remote processes are started,
 stopped, and inspected safely.
 
-For the API contract see [web-api.md](web-api.md); for Floability concepts see
+For the API contract see [web-api.md](web-api.md), for the complete browser SSH
+authentication flow see [ssh-authentication.md](ssh-authentication.md), and for
+Floability concepts see
 [floability-deployment-basics.md](floability-deployment-basics.md).
 
 ## Current implementation status
