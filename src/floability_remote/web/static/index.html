@@ -343,7 +343,7 @@
           <ol class="getting-started">
             <li>
               <span class="guide-number">1</span>
-              <span><strong>Connect</strong> to your cluster's login node.</span>
+              <span><strong>Connect</strong> to a remote login node.</span>
             </li>
             <li>
               <span class="guide-number">2</span>
@@ -359,7 +359,7 @@
 
         <div class="card cluster-card" id="cluster-card" hidden>
           <div class="cluster-head">
-            <h2 class="card-title">Cluster</h2>
+            <h2 class="card-title">Remote host</h2>
             <span class="badge cluster-badge" id="cluster-readiness" data-state="unchecked">Not checked</span>
           </div>
           <dl class="cluster-facts">
@@ -376,8 +376,12 @@
               <dd><code id="cluster-base-dir">—</code></dd>
             </div>
             <div>
+              <dt>Available batch systems</dt>
+              <dd id="cluster-batch-systems">Check the remote host to detect batch systems.</dd>
+            </div>
+            <div>
               <dt>Free space / quota</dt>
-              <dd id="cluster-storage">Check the cluster to inspect storage.</dd>
+              <dd id="cluster-storage">Check the remote host to inspect storage.</dd>
             </div>
           </dl>
           <details class="cluster-quota" id="cluster-quota" hidden>
@@ -386,7 +390,7 @@
           </details>
           <ul class="cluster-issues" id="cluster-issues"></ul>
           <p class="cluster-check-message" id="cluster-check-message" aria-live="polite"></p>
-          <button type="button" class="button secondary" id="check-cluster">Check cluster</button>
+          <button type="button" class="button secondary" id="check-cluster">Check remote host</button>
         </div>
       </aside>
     </form>

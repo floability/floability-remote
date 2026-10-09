@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -31,6 +32,7 @@ __FLOABILITY_REMOTE_CLUSTER_TOTAL_BYTES__=1000000
 __FLOABILITY_REMOTE_CLUSTER_FREE_BYTES__=750000
 __FLOABILITY_REMOTE_CLUSTER_QUOTA_STATUS__=reported
 __FLOABILITY_REMOTE_CLUSTER_QUOTA_SUMMARY__=100M used of 10G
+__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__=local,slurm
 """
 
 
@@ -48,6 +50,7 @@ class ClusterServiceTests(unittest.TestCase):
         self.assertEqual(report.remote_user, "alice")
         self.assertEqual(report.probe.floability_version, "0.3.1")
         self.assertEqual(report.free_bytes, 750000)
+        self.assertEqual(report.available_batch_types, ("local", "slurm"))
         self.assertEqual(report.requested_base_dir, "~/floability-base-dir")
         self.assertEqual(
             session.run_script.call_args_list[1].args,
@@ -115,6 +118,77 @@ class ClusterServiceTests(unittest.TestCase):
             self.assertRegex(
                 result.stdout, r"__FLOABILITY_REMOTE_CLUSTER_FREE_BYTES__=\d+"
             )
+            self.assertIn(
+                "__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__=local", result.stdout
+            )
+
+    def test_storage_script_detects_complete_scheduler_toolsets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command_dir = Path(directory) / "bin"
+            command_dir.mkdir()
+            for command in (
+                "sbatch",
+                "squeue",
+                "scancel",
+                "condor_submit",
+                "condor_q",
+                "condor_rm",
+                "qsub",
+                "qstat",
+                "qdel",
+                "qconf",
+            ):
+                path = command_dir / command
+                path.write_text("#!/bin/sh\nexit 0\n")
+                path.chmod(0o755)
+
+            result = subprocess.run(
+                ["bash", "-s", "--", directory],
+                input=remote_scripts.CHECK_CLUSTER_STORAGE,
+                text=True,
+                capture_output=True,
+                timeout=15,
+                env={**os.environ, "PATH": f"{command_dir}:{os.environ['PATH']}"},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__=local,slurm,condor,uge",
+                result.stdout,
+            )
+
+    def test_failed_quota_command_does_not_expose_its_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command_dir = Path(directory) / "bin"
+            command_dir.mkdir()
+            quota = command_dir / "quota"
+            quota.write_text(
+                "#!/bin/sh\n"
+                "echo 'Unrecognized argument or path: -s' >&2\n"
+                "exit 64\n"
+            )
+            quota.chmod(0o755)
+            timeout = command_dir / "timeout"
+            timeout.write_text("#!/bin/sh\nshift\nexec \"$@\"\n")
+            timeout.chmod(0o755)
+
+            result = subprocess.run(
+                ["bash", "-s", "--", directory],
+                input=remote_scripts.CHECK_CLUSTER_STORAGE,
+                text=True,
+                capture_output=True,
+                timeout=15,
+                env={**os.environ, "PATH": f"{command_dir}:{os.environ['PATH']}"},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "__FLOABILITY_REMOTE_CLUSTER_QUOTA_STATUS__=error", result.stdout
+            )
+            self.assertIn(
+                "__FLOABILITY_REMOTE_CLUSTER_QUOTA_SUMMARY__=\n", result.stdout
+            )
+            self.assertNotIn("Unrecognized argument", result.stdout)
 
 
 if __name__ == "__main__":

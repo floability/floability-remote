@@ -5,7 +5,7 @@ import re
 from typing import Optional, Tuple
 
 from . import remote_scripts
-from .config import DEFAULT_BASE_DIR, EnvironmentConfig
+from .config import DEFAULT_BASE_DIR, SUPPORTED_BATCH_TYPES, EnvironmentConfig
 from .errors import RemoteRunError
 from .models import RemoteProbe
 from .output import marker_values, parse_probe
@@ -27,6 +27,7 @@ class ClusterReport:
     free_bytes: Optional[int]
     quota_status: str
     quota_summary: str
+    available_batch_types: Tuple[str, ...]
     issues: Tuple[str, ...]
 
     @property
@@ -125,6 +126,10 @@ class ClusterService:
                 f"requested {environment.floability_version}."
             )
 
+        detected_batch_types = set(
+            required("__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__").split(",")
+        )
+
         return ClusterReport(
             remote_user=required("__FLOABILITY_REMOTE_CLUSTER_USER__"),
             remote_host=required("__FLOABILITY_REMOTE_CLUSTER_HOST__"),
@@ -137,5 +142,10 @@ class ClusterService:
             free_bytes=optional_integer("__FLOABILITY_REMOTE_CLUSTER_FREE_BYTES__"),
             quota_status=required("__FLOABILITY_REMOTE_CLUSTER_QUOTA_STATUS__"),
             quota_summary=required("__FLOABILITY_REMOTE_CLUSTER_QUOTA_SUMMARY__"),
+            available_batch_types=tuple(
+                batch_type
+                for batch_type in SUPPORTED_BATCH_TYPES
+                if batch_type == "local" or batch_type in detected_batch_types
+            ),
             issues=tuple(issues),
         )

@@ -99,9 +99,13 @@ class FrontendBoundaryTests(unittest.TestCase):
         self.assertIn('href="https://github.com/floability-hub"', html)
         self.assertIn('href="https://floability.readthedocs.io/en/stable/"', html)
         self.assertIn('id="cluster-card" hidden', html)
+        self.assertIn('<h2 class="card-title">Remote host</h2>', html)
+        self.assertIn('id="cluster-batch-systems"', html)
+        self.assertIn("Check remote host", html)
         source = (STATIC / "js" / "main.js").read_text()
         self.assertIn("renderConnectionSidebar", source)
         self.assertIn("api.checkCluster", source)
+        self.assertIn("setBatchAvailability(report.available_batch_types)", source)
 
 
 class WebCommandParserTests(unittest.TestCase):

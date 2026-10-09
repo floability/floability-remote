@@ -195,6 +195,7 @@ class ClusterCheckResponse(BaseModel):
     free_bytes: Optional[int] = None
     quota_status: str
     quota_summary: str
+    available_batch_types: List[str]
     issues: List[str] = Field(default_factory=list)
 
 
