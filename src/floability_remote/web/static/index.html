@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Floability Remote</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script type="module" src="/static/js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img class="brand-logo" src="/static/img/floability-logo.png" alt="Floability" width="106" height="28">
+        <span class="brand-name">Remote</span>
+        <span class="version" id="version"></span>
+      </div>
+      <div class="status" id="server-status" data-state="checking" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-label">Connecting…</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="banner" id="auth-banner" role="alert" hidden>
+      <strong>This browser is not signed in.</strong>
+      Open the link printed in the terminal by <code>floability-remote web</code>.
+    </div>
+
+    <section class="intro">
+      <h1>Deploy a backpack</h1>
+      <p>
+        Run a Floability backpack on a remote login node. Interactive runs forward
+        Jupyter to this computer over SSH; executions run to completion and keep
+        their outputs on the cluster.
+      </p>
+    </section>
+
+    <form id="run-form" class="layout" novalidate>
+      <div class="stack">
+        <section class="card run-card" id="run-panel" aria-labelledby="run-title" hidden>
+          <div class="run-head">
+            <div>
+              <h2 class="card-title" id="run-title">Execution</h2>
+              <p class="run-summary" id="run-summary"></p>
+            </div>
+            <span class="badge" id="run-state" data-state="running">Running</span>
+          </div>
+
+          <ol class="steps" id="run-steps"></ol>
+
+          <div class="confirm-box" id="run-confirmation" hidden>
+            <p class="confirm-message" id="confirmation-message"></p>
+            <div class="button-row">
+              <button type="button" class="button primary" id="confirmation-approve">Approve</button>
+              <button type="button" class="button secondary" id="confirmation-decline">Decline</button>
+            </div>
+          </div>
+
+          <div class="ready-box" id="run-ready" hidden>
+            <div class="ready-head">
+              <span class="ready-dot" aria-hidden="true"></span>
+              <strong>JupyterLab is ready</strong>
+            </div>
+            <p class="ready-text">
+              Forwarded to this computer over SSH. Keep this server running while you work;
+              save your notebooks before stopping the session.
+            </p>
+            <div class="button-row">
+              <a class="button primary" id="run-open" target="_blank" rel="noopener noreferrer">Open JupyterLab</a>
+              <button type="button" class="button secondary" id="copy-jupyter">Copy link</button>
+            </div>
+            <code class="ready-url" id="run-url"></code>
+          </div>
+
+          <p class="run-message" id="run-message" hidden></p>
+
+          <dl class="run-result" id="run-result" hidden></dl>
+
+          <section class="run-files" id="run-files" aria-labelledby="run-files-title" hidden>
+            <div class="run-files-head">
+              <h3 id="run-files-title">Files available for download</h3>
+              <span id="run-files-summary"></span>
+            </div>
+            <p class="run-files-status" id="run-files-status"></p>
+            <div class="run-file-groups" id="run-file-groups"></div>
+          </section>
+
+          <details class="run-log" id="run-log-details">
+            <summary>Full log <span class="log-count" id="log-count"></span></summary>
+            <pre id="run-log"></pre>
+          </details>
+
+          <div class="button-row">
+            <button type="button" class="button danger" id="cancel-run">Cancel run</button>
+            <button type="button" class="button secondary" id="new-run" hidden>Start another run</button>
+          </div>
+        </section>
+
+        <fieldset class="card">
+          <legend class="card-title"><span class="step">1</span>Connection</legend>
+
+          <div class="field" data-field="connection.target" data-label="Login node">
+            <label for="target">Login node</label>
+            <input id="target" name="connection.target" type="text" autocomplete="off"
+                   spellcheck="false" placeholder="user@login.cluster.edu or an SSH alias" required>
+            <p class="field-error" aria-live="polite"></p>
+          </div>
+
+          <div class="field" data-field="connection.identity_file" data-label="Identity file">
+            <label for="identity-file">Identity file <span class="optional">optional</span></label>
+            <input id="identity-file" name="connection.identity_file" type="text"
+                   autocomplete="off" spellcheck="false" placeholder="~/.ssh/id_ed25519">
+            <p class="field-error" aria-live="polite"></p>
+          </div>
+
+          <div class="connection-bar">
+            <div class="connection-status" id="connection-status" data-state="disconnected" role="status" aria-live="polite">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span class="connection-text">Not connected</span>
+            </div>
+            <div class="button-row">
+              <button type="button" class="button primary" id="connect">Connect</button>
+              <button type="button" class="button secondary" id="disconnect" hidden>Disconnect</button>
+            </div>
+          </div>
+
+          <div class="prompt" id="ssh-prompt" hidden>
+            <p class="prompt-title" id="prompt-title">The login node is asking:</p>
+            <pre class="prompt-message" id="prompt-message"></pre>
+            <div class="prompt-answer" id="prompt-secret">
+              <input type="password" id="prompt-input" autocomplete="off" spellcheck="false"
+                     aria-labelledby="prompt-title">
+              <button type="button" class="button primary" id="prompt-submit">Send</button>
+            </div>
+            <div class="button-row" id="prompt-confirm">
+              <button type="button" class="button primary" id="prompt-yes">Trust and continue</button>
+              <button type="button" class="button secondary" id="prompt-no">Reject</button>
+            </div>
+            <button type="button" class="link-button" id="prompt-cancel">Cancel sign-in</button>
+          </div>
+
+          <p class="connection-error" id="connection-error" role="alert" hidden></p>
+          <p class="hint">
+            Uses your <code>~/.ssh/config</code>, keys, and SSH agent. Passwords, MFA codes,
+            and new host keys are asked here and never stored.
+          </p>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend class="card-title"><span class="step">2</span>Backpack</legend>
+
+          <div class="field" data-field="backpack.repository" data-label="Repository">
+            <label for="repository">Repository</label>
+            <input id="repository" name="backpack.repository" type="url" list="backpack-examples"
+                   autocomplete="off" spellcheck="false"
+                   placeholder="https://github.com/floability-hub/matrix-multiplication.git" required>
+            <datalist id="backpack-examples">
+              <option value="https://github.com/floability-hub/matrix-multiplication.git">
+              <option value="https://github.com/floability-hub/matrix-multiplication-script.git">
+            </datalist>
+            <p class="hint">A public Git repository.</p>
+            <p class="field-error" aria-live="polite"></p>
+          </div>
+
+          <div class="row">
+            <div class="field" data-field="backpack.ref" data-label="Branch, tag, or commit">
+              <label for="ref">Branch, tag, or commit <span class="optional">optional</span></label>
+              <input id="ref" name="backpack.ref" type="text" autocomplete="off"
+                     spellcheck="false" placeholder="default branch">
+              <p class="field-error" aria-live="polite"></p>
+            </div>
+            <div class="field" data-field="entrypoint" data-label="Entrypoint">
+              <label for="entrypoint">Entrypoint <span class="optional">optional</span></label>
+              <input id="entrypoint" name="entrypoint" type="text" autocomplete="off"
+                     spellcheck="false" placeholder="file inside workflow/">
+              <p class="field-error" aria-live="polite"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend class="card-title"><span class="step">3</span>Run</legend>
+
+          <div class="field" data-field="mode" data-label="Mode">
+            <span class="label" id="mode-label">Mode</span>
+            <div class="choices" id="mode-choices" role="radiogroup" aria-labelledby="mode-label"></div>
+            <p class="field-error" aria-live="polite"></p>
+          </div>
+
+          <div class="field" data-field="batch_type" data-label="Batch system">
+            <span class="label" id="batch-label">Batch system</span>
+            <div class="segmented" id="batch-choices" role="radiogroup" aria-labelledby="batch-label"></div>
+            <p class="hint">Where Floability starts TaskVine workers.</p>
+            <p class="field-error" aria-live="polite"></p>
+          </div>
+
+          <details class="advanced">
+            <summary>Advanced options</summary>
+            <div class="advanced-body">
+              <details class="advanced-group">
+                <summary>
+                  <span class="advanced-group-title">Remote environment</span>
+                  <span class="advanced-group-description">Conda and Floability installation</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="row">
+                    <div class="field" data-field="environment.env_name" data-label="Floability environment">
+                      <label for="env-name">Floability environment</label>
+                      <input id="env-name" name="environment.env_name" type="text" spellcheck="false">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="environment.floability_version" data-label="Floability version">
+                      <label for="floability-version">Floability version <span class="optional">optional</span></label>
+                      <input id="floability-version" name="environment.floability_version" type="text"
+                             spellcheck="false" placeholder="latest">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
+
+                  <div class="field" data-field="environment.conda_executable" data-label="Conda executable">
+                    <label for="conda-executable">Remote Conda executable <span class="optional">optional</span></label>
+                    <input id="conda-executable" name="environment.conda_executable" type="text"
+                           spellcheck="false" placeholder="discovered automatically">
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
+
+                  <div class="field" data-field="environment.reinstall_miniforge" data-label="Reinstall Miniforge">
+                    <label class="check">
+                      <input name="environment.reinstall_miniforge" type="checkbox">
+                      <span>Reinstall Floability Remote's managed Miniforge</span>
+                    </label>
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
+                </div>
+              </details>
+
+              <details class="advanced-group">
+                <summary>
+                  <span class="advanced-group-title">Storage</span>
+                  <span class="advanced-group-description">Runs, environments, and reusable data</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="field" data-field="remote_root" data-label="Remote run directory">
+                    <label for="remote-root">Remote run directory</label>
+                    <input id="remote-root" name="remote_root" type="text" spellcheck="false">
+                    <p class="hint">Where Floability Remote stores clones and command logs.</p>
+                    <p class="field-error" aria-live="polite"></p>
+                  </div>
+
+                  <div class="row">
+                    <div class="field" data-field="base_dir" data-label="Floability base directory">
+                      <label for="base-dir">Floability base directory <span class="optional">optional</span></label>
+                      <input id="base-dir" name="base_dir" type="text" spellcheck="false"
+                             placeholder="~/floability-base-dir">
+                      <p class="hint">Instances and reusable software environments.</p>
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="data_cache_dir" data-label="Data cache directory">
+                      <label for="data-cache-dir">Data cache directory <span class="optional">optional</span></label>
+                      <input id="data-cache-dir" name="data_cache_dir" type="text" spellcheck="false"
+                             placeholder="&lt;base-dir&gt;/floability-data-cache">
+                      <p class="hint">Overrides Floability's data-cache location.</p>
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="advanced-group">
+                <summary>
+                  <span class="advanced-group-title">Floability options</span>
+                  <span class="advanced-group-description">Extra command-line options, such as --workers 2</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="option-list" id="floability-options"></div>
+                  <button type="button" class="button secondary small add-option" id="add-floability-option">
+                    + Add option
+                  </button>
+                  <p class="hint">
+                    Each row is passed to <code>floability</code> as <code>--name value</code>.
+                    Leave the value empty for an on/off flag.
+                  </p>
+                </div>
+              </details>
+
+              <details class="advanced-group" data-mode-only="run">
+                <summary>
+                  <span class="advanced-group-title">Interactive session</span>
+                  <span class="advanced-group-description">Jupyter and SSH tunnel ports</span>
+                </summary>
+                <div class="advanced-group-body">
+                  <div class="row">
+                    <div class="field" data-field="jupyter_port" data-label="Remote Jupyter port">
+                      <label for="jupyter-port">Remote Jupyter port</label>
+                      <input id="jupyter-port" name="jupyter_port" type="number" min="1" max="65535" inputmode="numeric">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                    <div class="field" data-field="local_port" data-label="Local port">
+                      <label for="local-port">Local port <span class="optional">optional</span></label>
+                      <input id="local-port" name="local_port" type="number" min="1" max="65535"
+                             inputmode="numeric" placeholder="automatic">
+                      <p class="field-error" aria-live="polite"></p>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </details>
+        </fieldset>
+      </div>
+
+      <aside class="summary">
+        <div class="card summary-card">
+          <h2 class="card-title">Review</h2>
+
+          <div class="validation" id="validation" data-state="idle" aria-live="polite">
+            <span class="validation-icon" aria-hidden="true"></span>
+            <span class="validation-text">Enter a login node and a repository.</span>
+          </div>
+          <ul class="general-errors" id="general-errors"></ul>
+
+          <div class="command">
+            <div class="command-head">
+              <span>Equivalent CLI command</span>
+              <button type="button" class="button ghost small" id="copy-command" disabled>Copy</button>
+            </div>
+            <pre><code id="command">—</code></pre>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="button secondary">Check configuration</button>
+            <button type="button" class="button primary" id="start" disabled>Start</button>
+            <p class="hint" id="start-note" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="card guidance-card" id="getting-started-card">
+          <h2 class="card-title">Getting started</h2>
+          <ol class="getting-started">
+            <li>
+              <span class="guide-number">1</span>
+              <span><strong>Connect</strong> to your cluster's login node.</span>
+            </li>
+            <li>
+              <span class="guide-number">2</span>
+              <span>Choose a backpack from the <a href="https://github.com/floability-hub" target="_blank" rel="noopener noreferrer">Floability Hub</a>.</span>
+            </li>
+            <li>
+              <span class="guide-number">3</span>
+              <span>Select how to run it, then press <strong>Start</strong>.</span>
+            </li>
+          </ol>
+          <a class="guide-docs" href="https://floability.readthedocs.io/en/stable/" target="_blank" rel="noopener noreferrer">Read the Floability documentation →</a>
+        </div>
+
+        <div class="card cluster-card" id="cluster-card" hidden>
+          <div class="cluster-head">
+            <h2 class="card-title">Cluster</h2>
+            <span class="badge cluster-badge" id="cluster-readiness" data-state="unchecked">Not checked</span>
+          </div>
+          <dl class="cluster-facts">
+            <div>
+              <dt>Account</dt>
+              <dd id="cluster-account">—</dd>
+            </div>
+            <div>
+              <dt>Floability environment</dt>
+              <dd id="cluster-environment">—</dd>
+            </div>
+            <div>
+              <dt>Base directory</dt>
+              <dd><code id="cluster-base-dir">—</code></dd>
+            </div>
+            <div>
+              <dt>Free space / quota</dt>
+              <dd id="cluster-storage">Check the cluster to inspect storage.</dd>
+            </div>
+          </dl>
+          <details class="cluster-quota" id="cluster-quota" hidden>
+            <summary>Quota details</summary>
+            <pre id="cluster-quota-output"></pre>
+          </details>
+          <ul class="cluster-issues" id="cluster-issues"></ul>
+          <p class="cluster-check-message" id="cluster-check-message" aria-live="polite"></p>
+          <button type="button" class="button secondary" id="check-cluster">Check cluster</button>
+        </div>
+      </aside>
+    </form>
+  </main>
+</body>
+</html>

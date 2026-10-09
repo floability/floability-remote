@@ -24,7 +24,9 @@ class ParserTests(unittest.TestCase):
     def test_run_arguments(self):
         args = self.parse("run")
         self.assertEqual(args.command, "run")
-        self.assertEqual(args.env_name, "floability-env")
+        self.assertEqual(args.env_name, "floability-remote-managed")
+        self.assertEqual(args.base_dir, "")
+        self.assertEqual(args.data_cache_dir, "")
         self.assertEqual(args.jupyter_port, 8888)
         self.assertFalse(args.verbose)
 
@@ -75,6 +77,25 @@ class ParserTests(unittest.TestCase):
         args.identity_file = "/definitely/missing/key.pem"
         with self.assertRaises(RemoteRunError):
             validate_args(args)
+
+    def test_cluster_check_arguments(self):
+        args = build_parser().parse_args(
+            [
+                "check-cluster",
+                "--target",
+                "user@login.example.org",
+                "--env-name",
+                "custom-env",
+                "--floability-version",
+                "0.4.0",
+                "--base-dir",
+                "/scratch/floability",
+            ]
+        )
+        self.assertEqual(args.command, "check-cluster")
+        self.assertEqual(args.env_name, "custom-env")
+        self.assertEqual(args.floability_version, "0.4.0")
+        self.assertEqual(args.base_dir, "/scratch/floability")
 
 
 if __name__ == "__main__":

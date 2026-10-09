@@ -9,7 +9,8 @@ remote system and does not modify Floability itself.
 
 ## Local installation
 
-You need Python 3.9 or newer and the system OpenSSH client. Install the command
+You need Python 3.9 or newer and the system OpenSSH client. The installer also
+installs the web interface's Python dependencies (FastAPI and Uvicorn). Install the command
 and its isolated virtual environment with:
 
 ```bash
@@ -83,9 +84,73 @@ floability-remote execute \
   --entrypoint <WORKFLOW_FILENAME>
 ```
 
-After execution, the client prints the remote backpack directory containing
-the synchronized workflow and generated outputs. Automatic output download is
-planned but not implemented yet.
+After execution, the client prints the retained remote run directory. Use it
+to list and download one result or log file:
+
+```bash
+floability-remote download \
+  --target <USER@LOGIN_NODE> \
+  --run-dir <REMOTE_RUN_DIRECTORY>
+```
+
+The command opens one SSH connection, groups the available files, and asks
+which one to save. For scripts, select a logical path and destination directly:
+
+```bash
+floability-remote download \
+  --target <USER@LOGIN_NODE> \
+  --run-dir <REMOTE_RUN_DIRECTORY> \
+  --file workflow/results.csv \
+  --output ./results.csv
+```
+
+Use `--list-only` to inspect files without downloading. Existing local files
+are never overwritten.
+
+### Web interface (preview)
+
+Start the local web interface:
+
+```bash
+floability-remote web
+```
+
+The server listens only on `127.0.0.1`, prints a sign-in link, and opens it in
+your browser. Use `--port` to choose the port and `--no-browser` to only print
+the link. Press Ctrl+C to stop it.
+
+From the browser you can:
+
+- connect to a login node; passwords, MFA codes, and new host keys are asked
+  in the page (OpenSSH 8.4 or newer) and never stored;
+- check whether the selected Floability environment and required remote tools
+  are ready, and inspect free filesystem space and available quota reporting;
+- validate a configuration and copy the equivalent CLI command;
+- execute a backpack, follow its progress and full log, approve a Miniforge
+  installation, and cancel with remote cleanup;
+- start an interactive run and open JupyterLab from the **Open JupyterLab**
+  link once the SSH tunnel is ready, then stop the session from the page; and
+- download individual workflow, log, metadata, and metrics files after a run
+  finishes.
+
+Runs and Jupyter sessions continue if you close the tab; reopening the page
+shows them again. Stopping the server with Ctrl+C stops an active run or
+session with remote cleanup and closes the SSH connection. See
+[docs/how-it-works.md](docs/how-it-works.md) for the architecture and current
+implementation status, [docs/web-ui-milestones.md](docs/web-ui-milestones.md)
+for planned work, and [docs/web-api.md](docs/web-api.md) for the API reference.
+
+The same read-only readiness check is available from the terminal:
+
+```bash
+floability-remote check-cluster \
+  --target <USER@LOGIN_NODE> \
+  --base-dir <REMOTE_FLOABILITY_BASE_DIRECTORY>
+```
+
+It does not install software or create the base directory. When the selected
+environment is missing, the normal `run` or `execute` flow can prepare it after
+confirmation.
 
 ## Authentication
 
@@ -114,18 +179,21 @@ floability-remote run \
 
 ## Remote environment
 
-The client looks for a remote Conda environment named `floability-env`. If the
-environment is missing, it creates the equivalent of:
+The client looks for a remote Conda environment named
+`floability-remote-managed`. It first uses the Conda installation available on
+the remote host. If the environment is missing, or exists without Floability,
+the client creates or repairs it with the equivalent of:
 
 ```bash
-conda create -y -n floability-env \
+conda create -y -n floability-remote-managed \
   -c conda-forge \
   --strict-channel-priority \
   python=3.12 \
   floability
 ```
 
-If Conda is unavailable, the client offers to install user-scoped Miniforge at:
+If no Conda installation can be found, the client asks before installing
+user-scoped Miniforge at:
 
 ```text
 ~/.local/share/floability-remote/miniforge
@@ -159,6 +227,46 @@ floability-remote execute \
   --batch-type slurm \
   --floability-version <VERSION>
 ```
+
+## Floability storage directories
+
+Floability Remote keeps cloned backpacks and command logs under `--remote-root`.
+Floability itself separately stores instances and reusable software environments
+under its base directory. Override Floability's storage locations when a cluster
+requires a scratch or project filesystem:
+
+```bash
+floability-remote execute \
+  --target my-cluster \
+  --backpack <GITHUB_URL> \
+  --batch-type slurm \
+  --base-dir /scratch/$USER/floability \
+  --data-cache-dir /scratch/$USER/floability-data-cache
+```
+
+When omitted, Floability uses `~/floability-base-dir` and its
+`floability-data-cache` subdirectory.
+
+## Extra Floability options
+
+Pass any other `floability run` or `floability execute` option with
+`--floability-option NAME=VALUE`, or `--floability-option NAME` for an on/off
+flag. Repeat it as needed:
+
+```bash
+floability-remote execute \
+  --target my-cluster \
+  --backpack <GITHUB_URL> \
+  --batch-type slurm \
+  --floability-option workers=2
+```
+
+This runs `floability execute ... --workers 2`. Each name and value is passed
+as a separate argument, never through a shell. Options that Floability Remote
+sets itself (`--backpack`, `--batch-type`, `--entrypoint`, `--jupyter-port`,
+`--base-dir`, `--data-cache-dir`) are rejected; use their dedicated settings.
+The web interface offers the same rows under **Advanced options → Floability
+options**.
 
 ## Progress and logs
 
@@ -194,6 +302,24 @@ The directory contains the cloned backpack and `run-command.log` or
 `execute-command.log`. It is retained after completion so results are not
 destroyed.
 
+## Downloadable files
+
+The CLI and web interface use the same file-inventory and transfer service.
+For a finished run they expose:
+
+- `run-command.log` or `execute-command.log`;
+- regular files under the Floability instance's `workflow/`;
+- regular files directly under `logs/`;
+- `catalog_update.json`; and
+- regular files under `metadata/` and `metrics/`.
+
+The instance directory is read from Floability's creation message in the
+command log. Symbolic links, `pyuser/`, `vine_factory_scratch/`,
+`vine-run-info/`, `.ipynb_checkpoints/`, environments, data caches,
+directories, and special files are never offered. A listing is limited to
+2,000 files, and an individual download to 100 MiB. Larger and multi-file
+transfers are deferred to a later version.
+
 ## Remote requirements
 
 - Linux;
@@ -209,24 +335,45 @@ credential forwarding is not implemented.
 ```text
 src/
 └── floability_remote/
-    ├── cli.py              command definitions and validation
+    ├── cli.py              argument parsing; adapter to the shared services
+    ├── cli_reporter.py     terminal rendering of workflow events
+    ├── cluster.py          read-only remote readiness and storage checks
+    ├── config.py           typed run configuration and validation
+    ├── events.py           structured events, sinks, and secret redaction
+    ├── files.py            safe retained-file inventory and download service
+    ├── interaction.py      confirmation callbacks and cancellation
+    ├── askpass.py          relay of SSH prompts to a client (web sign-in)
+    ├── connection.py       long-lived SSH connection for the web interface
+    ├── runs.py             background runs, event history, and cancellation
     ├── environment.py      remote Conda and Floability setup
+    ├── workspace.py        remote run directory and backpack clone
+    ├── workflow.py         shared run/execute orchestration
     ├── models.py           shared data structures
-    ├── output.py           quiet progress and Jupyter parsing
+    ├── output.py           remote marker and Floability output parsing
     ├── remote_scripts.py   Bash programs sent through SSH
     ├── ssh.py              OpenSSH sessions and tunnels
-    └── workflow.py         shared run/execute orchestration
+    └── web/
+        ├── server.py       `floability-remote web` startup
+        ├── app.py          FastAPI application factory
+        ├── security.py     loopback, origin, and session checks
+        ├── schemas.py      API request and response models
+        ├── errors.py       JSON error envelope
+        ├── routes/         thin `/api/v1` routes
+        └── static/         packaged HTML, CSS, and JavaScript client
 ```
 
-This separation leaves file transfer as a transport/workflow feature instead
-of mixing it into command parsing or output handling.
+The CLI and web API are adapters around the same services: deployment logic
+lives in `cluster`, `config`, `environment`, `files`, `workspace`, and
+`workflow`, never in argument parsing, API routes, or JavaScript.
 
 ## Tests
 
-Tests use the standard library and do not contact a remote host:
+Tests use `unittest` and do not contact a remote host. The web API tests also
+need `httpx`, provided by the `test` extra, and are skipped without it:
 
 ```bash
-python3 -m unittest discover -s tests -v
+python -m pip install --editable '.[test]'
+python -m unittest discover -s tests -v
 ```
 
 Before relying on the client, test both commands against a disposable login
@@ -236,7 +383,8 @@ factories, and batch jobs have stopped.
 
 ## Current limitations
 
-- Outputs are retained remotely but are not downloaded automatically yet.
+- Individual retained files can be downloaded explicitly; automatic,
+  multi-file, and large-result transfers are not implemented yet.
 - Interactive mode parses Floability's current human-readable Jupyter output.
 - Jupyter is expected to run on the login node where Floability is launched.
 - Detached sessions and reconnecting to an existing run are not supported.

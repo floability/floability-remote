@@ -1,4 +1,4 @@
-"""Parsing and user-facing progress output."""
+"""Parsing of remote script markers and Floability output."""
 
 import re
 from typing import Optional
@@ -32,35 +32,6 @@ _FLOABILITY_PROGRESS = (
     ("[floability] Shell script execution", "Executing the shell workflow"),
     ("[floability] notebook execution", "Executing the notebook workflow"),
 )
-
-
-class Reporter:
-    """Print concise progress by default and raw subprocess output on request."""
-
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
-        self._shown_details = set()
-
-    def step(self, current: int, total: int, message: str) -> None:
-        print(f"[remote] [{current}/{total}] {message}", flush=True)
-
-    def detail(self, message: str) -> None:
-        print(f"[remote]       {message}", flush=True)
-
-    def detail_once(self, message: str) -> None:
-        if message in self._shown_details:
-            return
-        self._shown_details.add(message)
-        self.detail(message)
-
-    def raw(self, line: str) -> None:
-        if self.verbose:
-            print(line, end="", flush=True)
-
-    def ready(self, url: str) -> None:
-        print("\n[remote] READY — open this URL in your local browser:", flush=True)
-        print(url, flush=True)
-        print("\nPress Ctrl+C here when you are finished.\n", flush=True)
 
 
 def marker_values(output: str) -> dict:
