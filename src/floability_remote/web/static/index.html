@@ -338,9 +338,55 @@
           </div>
         </div>
 
-        <div class="card roadmap-card">
-          <h2 class="card-title">Web availability</h2>
-          <ul class="roadmap" id="features"></ul>
+        <div class="card guidance-card" id="getting-started-card">
+          <h2 class="card-title">Getting started</h2>
+          <ol class="getting-started">
+            <li>
+              <span class="guide-number">1</span>
+              <span><strong>Connect</strong> to your cluster's login node.</span>
+            </li>
+            <li>
+              <span class="guide-number">2</span>
+              <span>Choose a backpack from the <a href="https://github.com/floability-hub" target="_blank" rel="noopener noreferrer">Floability Hub</a>.</span>
+            </li>
+            <li>
+              <span class="guide-number">3</span>
+              <span>Select how to run it, then press <strong>Start</strong>.</span>
+            </li>
+          </ol>
+          <a class="guide-docs" href="https://floability.readthedocs.io/en/stable/" target="_blank" rel="noopener noreferrer">Read the Floability documentation →</a>
+        </div>
+
+        <div class="card cluster-card" id="cluster-card" hidden>
+          <div class="cluster-head">
+            <h2 class="card-title">Cluster</h2>
+            <span class="badge cluster-badge" id="cluster-readiness" data-state="unchecked">Not checked</span>
+          </div>
+          <dl class="cluster-facts">
+            <div>
+              <dt>Account</dt>
+              <dd id="cluster-account">—</dd>
+            </div>
+            <div>
+              <dt>Floability environment</dt>
+              <dd id="cluster-environment">—</dd>
+            </div>
+            <div>
+              <dt>Base directory</dt>
+              <dd><code id="cluster-base-dir">—</code></dd>
+            </div>
+            <div>
+              <dt>Free space / quota</dt>
+              <dd id="cluster-storage">Check the cluster to inspect storage.</dd>
+            </div>
+          </dl>
+          <details class="cluster-quota" id="cluster-quota" hidden>
+            <summary>Quota details</summary>
+            <pre id="cluster-quota-output"></pre>
+          </details>
+          <ul class="cluster-issues" id="cluster-issues"></ul>
+          <p class="cluster-check-message" id="cluster-check-message" aria-live="polite"></p>
+          <button type="button" class="button secondary" id="check-cluster">Check cluster</button>
         </div>
       </aside>
     </form>

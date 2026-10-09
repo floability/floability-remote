@@ -43,10 +43,11 @@ class FrontendBoundaryTests(unittest.TestCase):
                 calls_server = "fetch(" in source or "EventSource(" in source
                 self.assertEqual(calls_server, script.name == "api.js")
 
-    def test_no_inline_scripts_or_external_assets(self):
+    def test_no_inline_scripts_or_external_script_and_style_assets(self):
         html = (STATIC / "index.html").read_text()
         self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)")
-        self.assertNotRegex(html, r'(?:href|src)="https?://')
+        self.assertNotRegex(html, r'<(?:script|img)[^>]+src="https?://')
+        self.assertNotRegex(html, r'<link[^>]+href="https?://')
 
     def test_form_fields_use_api_paths(self):
         html = (STATIC / "index.html").read_text()
@@ -90,6 +91,17 @@ class FrontendBoundaryTests(unittest.TestCase):
         for group in ("Run command", "Workflow and results", "Logs", "Run records"):
             self.assertIn(group, source)
         self.assertNotIn("section.open = true", source)
+
+    def test_sidebar_switches_from_guidance_to_cluster_readiness(self):
+        html = (STATIC / "index.html").read_text()
+        self.assertNotIn("Web availability", html)
+        self.assertIn('id="getting-started-card"', html)
+        self.assertIn('href="https://github.com/floability-hub"', html)
+        self.assertIn('href="https://floability.readthedocs.io/en/stable/"', html)
+        self.assertIn('id="cluster-card" hidden', html)
+        source = (STATIC / "js" / "main.js").read_text()
+        self.assertIn("renderConnectionSidebar", source)
+        self.assertIn("api.checkCluster", source)
 
 
 class WebCommandParserTests(unittest.TestCase):

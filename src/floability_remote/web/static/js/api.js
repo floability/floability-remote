@@ -65,6 +65,7 @@ export const api = {
   disconnect: () => request("DELETE", "/connection"),
   answerPrompt: (promptId, answer) =>
     request("POST", `/connection/prompts/${segment(promptId)}`, answer),
+  checkCluster: (settings) => request("POST", "/cluster/check", settings),
 
   startRun: (config) => request("POST", "/runs", config),
   currentRun: () => request("GET", "/runs/current"),

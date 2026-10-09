@@ -8,6 +8,7 @@ from typing import List, Optional, Sequence
 
 from . import __version__
 from .cli_reporter import CliReporter
+from .cluster import ClusterService
 from .config import (
     DEFAULT_ENV_NAME,
     DEFAULT_JUPYTER_PORT,
@@ -121,6 +122,43 @@ def build_parser() -> argparse.ArgumentParser:
         "--identity-file", help="Optional local SSH private-key path."
     )
     download_parser.add_argument(
+        "--ssh-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Additional OpenSSH -o option; repeat when needed.",
+    )
+
+    check_parser = commands.add_parser(
+        "check-cluster", help="Inspect remote Floability and storage readiness."
+    )
+    check_parser.add_argument(
+        "--target",
+        required=True,
+        help="OpenSSH alias, hostname, or user@host for the remote login node.",
+    )
+    check_parser.add_argument(
+        "--env-name", default=DEFAULT_ENV_NAME, help="Remote Conda environment name."
+    )
+    check_parser.add_argument(
+        "--floability-version",
+        default="",
+        help="Floability version the environment should provide.",
+    )
+    check_parser.add_argument(
+        "--conda-executable",
+        default="",
+        help="Absolute remote Conda path when discovery is insufficient.",
+    )
+    check_parser.add_argument(
+        "--base-dir",
+        default="",
+        help="Floability base directory whose filesystem should be inspected.",
+    )
+    check_parser.add_argument(
+        "--identity-file", help="Optional local SSH private-key path."
+    )
+    check_parser.add_argument(
         "--ssh-option",
         action="append",
         default=[],
@@ -433,6 +471,59 @@ def run_download(args: argparse.Namespace) -> int:
         session.close()
 
 
+def run_cluster_check(args: argparse.Namespace) -> int:
+    connection = validate_connection(
+        ConnectionConfig(
+            target=args.target,
+            identity_file=args.identity_file,
+            ssh_options=tuple(args.ssh_option),
+        )
+    )
+    environment = EnvironmentConfig(
+        env_name=args.env_name,
+        floability_version=args.floability_version,
+        conda_executable=args.conda_executable,
+    )
+    session = SSHSession(
+        connection.target,
+        identity_file=connection.identity_file,
+        ssh_options=connection.ssh_options,
+    )
+    try:
+        print(f"[remote] Connecting to {connection.target}...")
+        session.start()
+        report = ClusterService(session).check(environment, args.base_dir)
+
+        print(f"\nCluster: {report.remote_user}@{report.remote_host}")
+        print(f"Status: {'Ready' if report.ready else 'Setup required'}")
+        if report.probe.floability_version:
+            environment_label = (
+                f"{report.env_name} (Floability {report.probe.floability_version})"
+            )
+        elif report.probe.env_prefix:
+            environment_label = f"{report.env_name} (Floability not found)"
+        else:
+            environment_label = f"{report.env_name} (environment not found)"
+        print(f"Environment: {environment_label}")
+        print(f"Base directory: {report.resolved_base_dir}")
+        if report.total_bytes is not None and report.free_bytes is not None:
+            print(
+                f"Free space: {format_size(report.free_bytes)} of "
+                f"{format_size(report.total_bytes)}"
+            )
+        else:
+            print("Free space: Not reported")
+        if report.quota_status == "reported":
+            print(f"Quota: {report.quota_summary}")
+        else:
+            print("Quota: Not reported by this cluster")
+        for issue in report.issues:
+            print(f"  - {issue}")
+        return 0 if report.ready else 1
+    finally:
+        session.close()
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -440,6 +531,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return run_web(args)
         if args.command == "download":
             return run_download(args)
+        if args.command == "check-cluster":
+            return run_cluster_check(args)
         config = validate_args(args)
         workflow = RemoteWorkflow(
             config,

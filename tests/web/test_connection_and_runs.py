@@ -4,10 +4,13 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fake_ssh import PASSWORD, fake_ssh
 from floability_remote.events import EventKind
 from floability_remote.interaction import INSTALL_MINIFORGE, ConfirmationRequest
+from floability_remote.cluster import ClusterReport
+from floability_remote.models import RemoteProbe
 from test_runs import ScriptedWorkflow
 
 from .support import make_client, requires_web, run_request
@@ -94,6 +97,56 @@ class ConnectionAndRunApiTests(unittest.TestCase):
 
         response = self.client.delete("/api/v1/connection")
         self.assertEqual(response.json()["state"], "disconnected")
+
+    def test_cluster_check_uses_the_connected_session(self):
+        connected = self.connect()
+        report = ClusterReport(
+            remote_user=connected["remote_user"],
+            remote_host=connected["remote_host"],
+            probe=RemoteProbe(
+                os_name="Linux",
+                architecture="x86_64",
+                conda="/opt/conda/bin/conda",
+                env_prefix="/opt/conda/envs/floability-remote-managed",
+                floability_version="0.3.1",
+                git_available=True,
+                setsid_available=True,
+                downloader="curl",
+            ),
+            env_name="floability-remote-managed",
+            requested_base_dir="~/floability-base-dir",
+            resolved_base_dir="/home/user/floability-base-dir",
+            storage_path="/home/user",
+            total_bytes=1000,
+            free_bytes=750,
+            quota_status="not-reported",
+            quota_summary="",
+            issues=(),
+        )
+        with mock.patch(
+            "floability_remote.web.routes.cluster.ClusterService.check",
+            return_value=report,
+        ) as check:
+            response = self.client.post(
+                "/api/v1/cluster/check",
+                json={
+                    "target": TARGET,
+                    "env_name": "floability-remote-managed",
+                    "base_dir": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["ready"])
+        self.assertEqual(response.json()["free_bytes"], 750)
+        check.assert_called_once()
+
+    def test_cluster_check_requires_matching_connection(self):
+        response = self.client.post(
+            "/api/v1/cluster/check",
+            json={"target": TARGET, "env_name": "floability-remote-managed"},
+        )
+        self.assertEqual(response.status_code, 409)
 
     def test_invalid_target_is_rejected_with_field_issue(self):
         response = self.client.post(

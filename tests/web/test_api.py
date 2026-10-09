@@ -32,6 +32,7 @@ class SystemEndpointTests(unittest.TestCase):
     def test_openapi_is_versioned(self):
         schema = self.client.get("/api/v1/openapi.json").json()
         self.assertIn("/api/v1/runs/validate", schema["paths"])
+        self.assertIn("/api/v1/cluster/check", schema["paths"])
         self.assertIn("/api/v1/runs/{run_id}/files", schema["paths"])
         self.assertEqual(self.client.get("/docs").status_code, 404)
 

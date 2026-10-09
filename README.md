@@ -123,6 +123,8 @@ From the browser you can:
 
 - connect to a login node; passwords, MFA codes, and new host keys are asked
   in the page (OpenSSH 8.4 or newer) and never stored;
+- check whether the selected Floability environment and required remote tools
+  are ready, and inspect free filesystem space and available quota reporting;
 - validate a configuration and copy the equivalent CLI command;
 - execute a backpack, follow its progress and full log, approve a Miniforge
   installation, and cancel with remote cleanup;
@@ -136,6 +138,18 @@ shows them again. Stopping the server with Ctrl+C stops an active run or
 session with remote cleanup and closes the SSH connection. See
 [docs/web-ui-milestones.md](docs/web-ui-milestones.md) and the API reference in
 [docs/web-api.md](docs/web-api.md).
+
+The same read-only readiness check is available from the terminal:
+
+```bash
+floability-remote check-cluster \
+  --target <USER@LOGIN_NODE> \
+  --base-dir <REMOTE_FLOABILITY_BASE_DIRECTORY>
+```
+
+It does not install software or create the base directory. When the selected
+environment is missing, the normal `run` or `execute` flow can prepare it after
+confirmation.
 
 ## Authentication
 
@@ -322,6 +336,7 @@ src/
 └── floability_remote/
     ├── cli.py              argument parsing; adapter to the shared services
     ├── cli_reporter.py     terminal rendering of workflow events
+    ├── cluster.py          read-only remote readiness and storage checks
     ├── config.py           typed run configuration and validation
     ├── events.py           structured events, sinks, and secret redaction
     ├── files.py            safe retained-file inventory and download service
@@ -347,8 +362,8 @@ src/
 ```
 
 The CLI and web API are adapters around the same services: deployment logic
-lives in `config`, `environment`, `workspace`, and `workflow`, never in
-argument parsing, API routes, or JavaScript.
+lives in `cluster`, `config`, `environment`, `files`, `workspace`, and
+`workflow`, never in argument parsing, API routes, or JavaScript.
 
 ## Tests
 

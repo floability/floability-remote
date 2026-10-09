@@ -12,6 +12,7 @@ SUPPORTED_MODES = ("run", "execute")
 SUPPORTED_BATCH_TYPES = ("local", "slurm", "condor", "uge")
 DEFAULT_ENV_NAME = "floability-remote-managed"
 DEFAULT_REMOTE_ROOT = "~/.cache/floability-remote/runs"
+DEFAULT_BASE_DIR = "~/floability-base-dir"
 DEFAULT_JUPYTER_PORT = 8888
 
 
@@ -218,9 +219,7 @@ def run_config_issues(config: RunConfig) -> List[ValidationIssue]:
         ("data_cache_dir", config.data_cache_dir, "--data-cache-dir"),
     ):
         if value and (
-            not value.strip()
-            or value.startswith("-")
-            or _has_control_characters(value)
+            not value.strip() or value.startswith("-") or _has_control_characters(value)
         ):
             problem(
                 field,

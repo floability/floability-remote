@@ -478,21 +478,6 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
 .button.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
 .button.small { height: 26px; padding: 0 10px; font-size: 12px; text-transform: none; letter-spacing: 0; }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  white-space: nowrap;
-}
-.pill[data-available="true"] { background: var(--success-soft); color: var(--success); border-color: transparent; }
-
 .button.danger { background: var(--surface); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .button.danger:hover:not(:disabled) { background: var(--danger-soft); }
 .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -509,6 +494,48 @@ input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 
 }
 .link-button:hover { color: var(--text); }
 a.button { text-decoration: none; }
+
+/* Sidebar guidance and cluster readiness ------------------------------- */
+
+.getting-started {
+  display: grid;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+.getting-started li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; color: var(--text-muted); line-height: 1.45; }
+.getting-started strong { color: var(--text); }
+.guide-number {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.guidance-card a { color: var(--accent); }
+.guide-docs { display: inline-block; font-size: 13px; font-weight: 600; text-decoration: none; }
+.guide-docs:hover { text-decoration: underline; }
+
+.cluster-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cluster-badge[data-state="ready"] { background: var(--success-soft); color: var(--success); }
+.cluster-badge[data-state="setup"] { background: var(--warning-soft); color: var(--warning); }
+.cluster-badge[data-state="checking"] { background: var(--accent-soft); color: var(--accent); }
+.cluster-facts { display: grid; gap: 0; margin: 14px 0; }
+.cluster-facts > div { padding: 11px 0; border-bottom: 1px solid var(--border); }
+.cluster-facts > div:last-child { border-bottom: 0; }
+.cluster-facts dt { margin-bottom: 4px; color: var(--text-faint); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.cluster-facts dd { margin: 0; color: var(--text); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.cluster-facts code { font-size: 12px; }
+.cluster-quota { margin: -4px 0 14px; font-size: 12px; }
+.cluster-quota summary { color: var(--text-muted); cursor: pointer; }
+.cluster-quota pre { max-height: 140px; overflow: auto; margin: 8px 0 0; padding: 9px; border-radius: var(--radius-sm); background: var(--surface-muted); white-space: pre-wrap; font-size: 11px; }
+.cluster-issues { margin: 0 0 12px; padding-left: 18px; color: var(--warning); font-size: 12px; line-height: 1.45; }
+.cluster-check-message { min-height: 18px; margin: 0 0 10px; color: var(--text-muted); font-size: 12px; }
 
 /* Connection ------------------------------------------------------------- */
 
@@ -735,8 +762,3 @@ a.button { text-decoration: none; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-.roadmap { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
-.roadmap li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13.5px; }
-.roadmap .feature-text { color: var(--text-muted); }
-.roadmap .feature-name { color: var(--text); font-weight: 600; margin-right: 6px; text-transform: capitalize; }

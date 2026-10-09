@@ -143,6 +143,11 @@ Success condition: the page connects to a password-only CRC account and a
 key-based test host, runs `whoami`, and disconnects without retaining the
 password.
 
+The connected view also provides a read-only cluster check shared with the
+`check-cluster` CLI command. It reports the selected Floability environment,
+required tools, base-directory filesystem capacity, and best-effort quota
+information without installing or changing anything.
+
 ### 3. Complete one `execute` vertical slice
 
 Add a run form with:
