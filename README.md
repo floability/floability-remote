@@ -136,8 +136,9 @@ From the browser you can:
 Runs and Jupyter sessions continue if you close the tab; reopening the page
 shows them again. Stopping the server with Ctrl+C stops an active run or
 session with remote cleanup and closes the SSH connection. See
-[docs/web-ui-milestones.md](docs/web-ui-milestones.md) and the API reference in
-[docs/web-api.md](docs/web-api.md).
+[docs/how-it-works.md](docs/how-it-works.md) for the architecture and current
+implementation status, [docs/web-ui-milestones.md](docs/web-ui-milestones.md)
+for planned work, and [docs/web-api.md](docs/web-api.md) for the API reference.
 
 The same read-only readiness check is available from the terminal:
 
