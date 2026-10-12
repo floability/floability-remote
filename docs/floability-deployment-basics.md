@@ -48,10 +48,11 @@ Exact contents vary by backpack. Floability is responsible for interpreting
 the backpack, materializing data, preparing its software environment, starting
 TaskVine workers, and running the selected workflow.
 
-The current remote client accepts a public Git repository, an optional branch,
-tag, or commit, and an optional entrypoint. An entrypoint must remain inside
-the backpack's `workflow/` directory. Private repository authentication and
-arbitrary local uploads are not implemented.
+The remote client accepts a Git repository, local folder, or ZIP file. Git
+sources accept an optional branch, tag, or commit, and all sources accept an
+optional entrypoint. An entrypoint must remain inside the backpack's
+`workflow/` directory. Dedicated private-repository authentication is not yet
+implemented.
 
 ## Two execution modes
 
@@ -121,8 +122,8 @@ has already approved it. Core business logic must request confirmation through
 a callback or interface; it must not call `input()` directly because web API
 requests cannot answer terminal prompts.
 
-`--remote-root` controls where Floability Remote keeps each cloned backpack and
-its command log. The independent Floability options `--base-dir` and
+`--remote-root` controls where Floability Remote keeps each cloned or uploaded
+backpack and its command log. The independent Floability options `--base-dir` and
 `--data-cache-dir` control instance, software-environment, and input-data cache
 storage on the remote system. These paths are useful when a cluster requires
 large reusable data to live on a scratch or project filesystem.
@@ -155,7 +156,7 @@ One CLI invocation currently performs these steps:
 2. Probe and prepare the remote launcher environment.
 3. Create a unique directory under
    `~/.cache/floability-remote/runs/`.
-4. Clone the public backpack repository into that directory.
+4. Clone the Git source or upload a validated local backpack into that directory.
 5. Launch Floability in a new session and record its PID and command log.
 6. Stream output and convert recognized Floability messages into concise
    progress updates.
@@ -167,11 +168,11 @@ One CLI invocation currently performs these steps:
 10. Close the tunnel and SSH control connection.
 11. Retain the remote run directory and report its location.
 
-The current clone-per-invocation behavior is sufficient for the CLI. The web UI
-will eventually need a persistent **workspace** so a user can open Jupyter,
-edit backpack files, and submit the edited workspace without cloning a fresh
-copy. A workspace, an interactive session, and an execution run should remain
-separate domain objects.
+Each Git run still clones a fresh remote copy. The web UI can also clone a
+repository locally, let the user edit it with their preferred tools, and upload
+the current local folder when Start is pressed. A future in-page editor would
+need a more persistent **workspace**. A workspace, an interactive session, and
+an execution run should remain separate domain objects.
 
 ## Progress, logs, and events
 
@@ -198,7 +199,7 @@ Every invocation currently retains:
 
 ```text
 <remote-run-directory>/
-├── backpack/                 cloned repository and generated outputs
+├── backpack/                 cloned/uploaded backpack and generated outputs
 ├── run-command.log           interactive mode, when used
 ├── execute-command.log       execute mode, when used
 └── .floability-remote-run

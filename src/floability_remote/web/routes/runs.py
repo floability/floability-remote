@@ -37,6 +37,8 @@ def run_response(run: Run) -> RunResponse:
         state=run.state,
         target=config.connection.target,
         repository=config.backpack.repository,
+        source_type=config.backpack.source_type,
+        local_path=config.backpack.local_path,
         ref=config.backpack.ref,
         batch_type=config.batch_type,
         entrypoint=config.entrypoint,

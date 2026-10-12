@@ -76,7 +76,7 @@ against the previous implementation):
 - a `Confirm` callback for Miniforge installation instead of `input()`;
 - a thread-safe `CancelToken` and `RemoteWorkflow.cancel()` that run the same
   SIGINT/SIGTERM cleanup as Ctrl+C;
-- `workspace.py` for the remote run directory and clone; and
+- `workspace.py` for the remote run directory and backpack clone/upload; and
 - Jupyter-token redaction for logs while the `ready` event keeps the
   clickable link.
 

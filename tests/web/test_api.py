@@ -1,5 +1,7 @@
 import shlex
+import tempfile
 import unittest
+from pathlib import Path
 
 from floability_remote import __version__
 from floability_remote.cli import build_parser, cli_arguments, validate_args
@@ -133,6 +135,22 @@ class ValidateRunTests(unittest.TestCase):
         self.assertEqual(
             response.json()["error"]["issues"][0]["field"], "connection.ssh_options"
         )
+
+    def test_local_backpack_validation_uses_shared_inspector(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "workflow").mkdir()
+            (root / "workflow" / "main.py").write_text("print('ok')")
+            result = self.validate(
+                run_request(
+                    backpack={
+                        "source_type": "folder",
+                        "local_path": str(root),
+                    }
+                )
+            ).json()
+        self.assertTrue(result["valid"], result["issues"])
+        self.assertIn(f"--backpack {root.resolve()}", result["command"])
 
 
 class CliArgumentRoundTripTests(unittest.TestCase):

@@ -9,6 +9,7 @@ import {
   syncModeFields,
 } from "./form.js";
 import { RunPanel } from "./run.js";
+import { BackpackPicker } from "./backpack.js";
 
 const HEALTH_INTERVAL_MS = 15000;
 const VALIDATE_DELAY_MS = 300;
@@ -36,6 +37,11 @@ let starting = false;
 let clusterChecking = false;
 let checkedClusterKey = null;
 let availableBatchTypes = null;
+
+const backpackPicker = new BackpackPicker(form, {
+  onChange: () => scheduleValidation(),
+  onError: (error) => handleError(error, (message) => setValidation("error", message)),
+});
 
 // Status ------------------------------------------------------------------
 
@@ -125,7 +131,7 @@ async function validate() {
       if (shown > 0) {
         setValidation("invalid", `${shown} ${shown === 1 ? "field needs" : "fields need"} attention.`);
       } else {
-        setValidation("idle", "Enter a login node and a repository.");
+        setValidation("idle", "Enter a login node and choose a backpack.");
       }
       commandOutput.textContent = "—";
       copyButton.disabled = true;
@@ -397,7 +403,8 @@ const runPanel = new RunPanel({
     if (stopFollowing) stopFollowing();
     runPanel.hide();
     updateStartControl();
-    form.querySelector("#repository").focus();
+    const source = new FormData(form).get("backpack.source_type");
+    form.querySelector(source === "git" ? "#repository" : "#local-folder-path")?.focus();
   },
 });
 
@@ -412,6 +419,7 @@ function restoreRunFields(run) {
     const input = form.elements.namedItem(name);
     if (input && !input.value) input.value = value;
   }
+  backpackPicker.restore(run.source_type, run.local_path);
   for (const [name, value] of [["mode", run.mode], ["batch_type", run.batch_type]]) {
     const choice = form.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
     if (choice) choice.checked = true;

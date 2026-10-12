@@ -178,7 +178,8 @@ export function showIssues(form, issues, visibleFields) {
     field.querySelector(".field-error").textContent = "";
   }
   for (const issue of issues) {
-    const field = form.querySelector(`[data-field="${CSS.escape(issue.field)}"]`);
+    const candidates = [...form.querySelectorAll(`[data-field="${CSS.escape(issue.field)}"]`)];
+    const field = candidates.find((candidate) => !candidate.closest("[hidden]")) || candidates[0];
     if (!field) {
       unmatched.push(issueText(null, issue));
       shown += 1;

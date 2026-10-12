@@ -84,6 +84,35 @@ floability-remote execute \
   --entrypoint <WORKFLOW_FILENAME>
 ```
 
+### Run a local backpack
+
+`--backpack` also accepts a local folder or ZIP file. Floability Remote checks
+the backpack, skips local development artifacts such as `.git` and `.venv`,
+and uploads a fresh copy through the existing SSH connection for every run:
+
+```bash
+floability-remote execute \
+  --target <USER@LOGIN_NODE> \
+  --backpack ./my-backpack \
+  --batch-type slurm
+```
+
+Local backpacks must contain `workflow/`, may contain at most 5,000 files and
+200 MB of data, and cannot contain symlinks. ZIP paths are checked before any
+remote upload.
+
+Copy a Git backpack to `~/floability-backpacks/` when you want to edit it
+locally first:
+
+```bash
+floability-remote clone \
+  https://github.com/floability-hub/matrix-multiplication-script.git
+```
+
+Use `--ref <BRANCH_TAG_OR_COMMIT>` or `--into <LOCAL_FOLDER>` when needed.
+The clone's repository, ref, commit, and edit status are recorded when that
+folder is run.
+
 After execution, the client prints the retained remote run directory. Use it
 to list and download one result or log file:
 
@@ -126,6 +155,8 @@ From the browser you can:
 - check whether the selected Floability environment and required remote tools
   are ready, and inspect free filesystem space and available quota reporting;
 - validate a configuration and copy the equivalent CLI command;
+- choose a Git repository, local folder, or ZIP backpack; copy a Git backpack
+  locally for editing; and open a local copy in the file browser or VS Code;
 - execute a backpack, follow its progress and full log, approve a Miniforge
   installation, and cancel with remote cleanup;
 - start an interactive run and open JupyterLab from the **Open JupyterLab**
@@ -230,7 +261,7 @@ floability-remote execute \
 
 ## Floability storage directories
 
-Floability Remote keeps cloned backpacks and command logs under `--remote-root`.
+Floability Remote keeps cloned or uploaded backpacks and command logs under `--remote-root`.
 Floability itself separately stores instances and reusable software environments
 under its base directory. Override Floability's storage locations when a cluster
 requires a scratch or project filesystem:
@@ -298,7 +329,7 @@ Every invocation creates a unique directory similar to:
 ~/.cache/floability-remote/runs/20261005-153000-a1b2c3d4/
 ```
 
-The directory contains the cloned backpack and `run-command.log` or
+The directory contains the cloned or uploaded backpack and `run-command.log` or
 `execute-command.log`. It is retained after completion so results are not
 destroyed.
 

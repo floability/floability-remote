@@ -33,6 +33,23 @@ async function request(method, path, body) {
   return data;
 }
 
+async function rawRequest(method, path, body) {
+  const response = await fetch(`${API_PREFIX}${path}`, {
+    method,
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/octet-stream" },
+    body,
+  }).catch(() => {
+    throw new ApiError(0, { code: "network", message: "The local server is not reachable." });
+  });
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(response.status, (data && data.error) || { message: response.statusText });
+  }
+  return data;
+}
+
 const segment = encodeURIComponent;
 
 /**
@@ -59,6 +76,19 @@ export const api = {
   health: () => request("GET", "/health"),
   meta: () => request("GET", "/meta"),
   validateRun: (config) => request("POST", "/runs/validate", config),
+  inspectBackpack: (path) => request("POST", "/backpacks/inspect", { path }),
+  createBackpackStaging: () => request("POST", "/backpacks/staging"),
+  uploadBackpackFile: (uploadId, path, file) =>
+    rawRequest("PUT", `/backpacks/staging/${segment(uploadId)}/files?path=${segment(path)}`, file),
+  completeBackpackStaging: (uploadId) =>
+    request("POST", `/backpacks/staging/${segment(uploadId)}/complete`),
+  uploadBackpackZip: (file) =>
+    rawRequest("POST", `/backpacks/zip?filename=${segment(file.name)}`, file),
+  cloneBackpack: (repository, ref, destination) =>
+    request("POST", "/backpacks/clone", { repository, ref, destination }),
+  backpackStatus: (path) => request("POST", "/backpacks/status", { path }),
+  discardBackpackChanges: (path) => request("POST", "/backpacks/discard", { path }),
+  openBackpack: (path, editor) => request("POST", "/backpacks/open", { path, editor }),
 
   connection: () => request("GET", "/connection"),
   connect: (connection) => request("POST", "/connection", connection),

@@ -153,32 +153,88 @@
         <fieldset class="card">
           <legend class="card-title"><span class="step">2</span>Backpack</legend>
 
-          <div class="field" data-field="backpack.repository" data-label="Repository">
-            <label for="repository">Repository</label>
-            <input id="repository" name="backpack.repository" type="url" list="backpack-examples"
-                   autocomplete="off" spellcheck="false"
-                   placeholder="https://github.com/floability-hub/matrix-multiplication.git" required>
-            <datalist id="backpack-examples">
-              <option value="https://github.com/floability-hub/matrix-multiplication.git">
-              <option value="https://github.com/floability-hub/matrix-multiplication-script.git">
-            </datalist>
-            <p class="hint">A public Git repository.</p>
+          <div class="field" data-field="backpack.source_type" data-label="Backpack source">
+            <span class="label" id="backpack-source-label">Source</span>
+            <div class="segmented" id="backpack-source" role="radiogroup" aria-labelledby="backpack-source-label">
+              <label class="segment"><input type="radio" name="backpack.source_type" value="git" checked><span>Git repository</span></label>
+              <label class="segment"><input type="radio" name="backpack.source_type" value="folder"><span>Local folder</span></label>
+              <label class="segment"><input type="radio" name="backpack.source_type" value="zip"><span>ZIP file</span></label>
+            </div>
             <p class="field-error" aria-live="polite"></p>
           </div>
 
-          <div class="row">
+          <div data-backpack-source="git">
+            <div class="field" data-field="backpack.repository" data-label="Repository">
+              <label for="repository">Repository</label>
+              <input id="repository" name="backpack.repository" type="url" list="backpack-examples"
+                     autocomplete="off" spellcheck="false"
+                     placeholder="https://github.com/floability-hub/matrix-multiplication.git" required>
+              <datalist id="backpack-examples">
+                <option value="https://github.com/floability-hub/matrix-multiplication.git">
+                <option value="https://github.com/floability-hub/matrix-multiplication-script.git">
+              </datalist>
+              <p class="hint">A public Git repository.</p>
+              <p class="field-error" aria-live="polite"></p>
+            </div>
             <div class="field" data-field="backpack.ref" data-label="Branch, tag, or commit">
               <label for="ref">Branch, tag, or commit <span class="optional">optional</span></label>
               <input id="ref" name="backpack.ref" type="text" autocomplete="off"
                      spellcheck="false" placeholder="default branch">
               <p class="field-error" aria-live="polite"></p>
             </div>
-            <div class="field" data-field="entrypoint" data-label="Entrypoint">
-              <label for="entrypoint">Entrypoint <span class="optional">optional</span></label>
-              <input id="entrypoint" name="entrypoint" type="text" autocomplete="off"
-                     spellcheck="false" placeholder="file inside workflow/">
+            <details class="clone-panel">
+              <summary>Copy to my computer</summary>
+              <p class="hint">Create a local copy that you can edit before each run.</p>
+              <div class="field">
+                <label for="clone-destination">Location <span class="optional">optional</span></label>
+                <input id="clone-destination" type="text" autocomplete="off" spellcheck="false"
+                       placeholder="~/floability-backpacks/repository-name">
+              </div>
+              <button type="button" class="button secondary" id="clone-backpack">Copy repository</button>
+              <p class="field-error" id="clone-error" aria-live="polite"></p>
+            </details>
+          </div>
+
+          <div data-backpack-source="folder" hidden>
+            <div class="field" data-field="backpack.local_path" data-label="Local folder">
+              <label for="local-folder-path">Local folder</label>
+              <div class="input-action">
+                <input id="local-folder-path" name="backpack.local_path" type="text"
+                       autocomplete="off" spellcheck="false" placeholder="~/floability-backpacks/my-backpack" disabled>
+                <button type="button" class="button secondary" id="choose-folder">Choose folder</button>
+              </div>
+              <input id="folder-picker" type="file" webkitdirectory multiple hidden>
+              <p class="hint">Paste a path on this computer, or choose a folder.</p>
               <p class="field-error" aria-live="polite"></p>
             </div>
+            <div id="local-backpack-actions" hidden>
+              <div class="button-row">
+                <button type="button" class="button secondary small" id="open-folder">Open folder</button>
+                <button type="button" class="button secondary small" id="open-vscode">Open in VS Code</button>
+                <button type="button" class="button ghost small" id="discard-changes" hidden>Discard changes</button>
+              </div>
+              <p class="hint">Edit the files here; each run uploads the current version.</p>
+              <p class="hint" id="git-status"></p>
+            </div>
+          </div>
+
+          <div data-backpack-source="zip" hidden>
+            <div class="field" data-field="backpack.local_path" data-label="ZIP file">
+              <label>ZIP file</label>
+              <button type="button" class="button secondary" id="choose-zip">Choose ZIP</button>
+              <input id="zip-picker" type="file" accept=".zip,application/zip" hidden>
+              <input id="local-zip-path" name="backpack.local_path" type="hidden" disabled>
+              <p class="field-error" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <div class="backpack-summary" id="backpack-summary" hidden aria-live="polite"></div>
+
+          <div class="field" data-field="entrypoint" data-label="Entrypoint">
+            <label for="entrypoint">Entrypoint <span class="optional">optional</span></label>
+            <input id="entrypoint" name="entrypoint" type="text" autocomplete="off"
+                   spellcheck="false" placeholder="file inside workflow/">
+            <p class="field-error" aria-live="polite"></p>
           </div>
         </fieldset>
 

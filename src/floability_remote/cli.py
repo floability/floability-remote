@@ -33,6 +33,7 @@ from .files import (
     select_file,
 )
 from .interaction import INSTALL_MINIFORGE, Confirm, ConfirmationRequest
+from .local_backpack import clone as clone_backpack
 from .ssh import SSHSession
 from .workflow import RemoteWorkflow
 
@@ -165,6 +166,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="Additional OpenSSH -o option; repeat when needed.",
     )
+
+    clone_parser = commands.add_parser(
+        "clone", help="Copy a Git backpack to this computer for editing."
+    )
+    clone_parser.add_argument("repository", help="Git repository URL.")
+    clone_parser.add_argument("--ref", default="", help="Branch, tag, or commit.")
+    clone_parser.add_argument(
+        "--into",
+        default="",
+        help="Destination folder (default: ~/floability-backpacks/<repo-name>).",
+    )
     return parser
 
 
@@ -175,7 +187,9 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="OpenSSH alias, hostname, or user@host for the remote login node.",
     )
     parser.add_argument(
-        "--backpack", required=True, help="Public Git repository URL to clone."
+        "--backpack",
+        required=True,
+        help="Git repository URL, local backpack folder, or local ZIP file.",
     )
     parser.add_argument("--batch-type", required=True, choices=SUPPORTED_BATCH_TYPES)
     parser.add_argument(
@@ -269,6 +283,20 @@ def port_number(raw: str) -> int:
 
 
 def config_from_args(args: argparse.Namespace) -> RunConfig:
+    backpack_path = Path(args.backpack).expanduser()
+    path_hint = (
+        args.backpack.startswith((".", "~", "/"))
+        or args.backpack.lower().endswith(".zip")
+    )
+    if backpack_path.exists() or path_hint:
+        source_type = "folder" if backpack_path.is_dir() else "zip"
+        source = BackpackSource(
+            source_type=source_type,
+            local_path=str(backpack_path.resolve()),
+            ref=args.ref,
+        )
+    else:
+        source = BackpackSource(repository=args.backpack, ref=args.ref)
     return RunConfig(
         mode=args.command,
         connection=ConnectionConfig(
@@ -276,7 +304,7 @@ def config_from_args(args: argparse.Namespace) -> RunConfig:
             identity_file=args.identity_file,
             ssh_options=tuple(args.ssh_option),
         ),
-        backpack=BackpackSource(repository=args.backpack, ref=args.ref),
+        backpack=source,
         batch_type=args.batch_type,
         environment=EnvironmentConfig(
             env_name=args.env_name,
@@ -309,7 +337,7 @@ def cli_arguments(config: RunConfig) -> List[str]:
         "--target",
         config.connection.target,
         "--backpack",
-        config.backpack.repository,
+        config.backpack.display_location,
         "--batch-type",
         config.batch_type,
     ]
@@ -524,6 +552,15 @@ def run_cluster_check(args: argparse.Namespace) -> int:
         session.close()
 
 
+def run_clone(args: argparse.Namespace) -> int:
+    result = clone_backpack(args.repository, args.ref, args.into)
+    print(f"Backpack copied to {result.path}")
+    if result.provenance.commit:
+        print(f"Commit: {result.provenance.commit}")
+    print("Run it with --backpack " + shlex.quote(result.path))
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -533,6 +570,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return run_download(args)
         if args.command == "check-cluster":
             return run_cluster_check(args)
+        if args.command == "clone":
+            return run_clone(args)
         config = validate_args(args)
         workflow = RemoteWorkflow(
             config,

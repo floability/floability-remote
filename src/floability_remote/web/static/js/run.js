@@ -142,7 +142,8 @@ export class RunPanel {
     this.stopping = Boolean(run.cancel_requested);
 
     const ref = run.ref ? ` @ ${run.ref}` : "";
-    this.summary.textContent = `${run.repository}${ref} · ${run.batch_type} on ${run.target}`;
+    const backpack = run.source_type === "git" ? run.repository : run.local_path;
+    this.summary.textContent = `${backpack}${ref} · ${run.batch_type} on ${run.target}`;
     this.panel.hidden = false;
     this.setState(run.cancel_requested && run.state === "running" ? "cancelling" : run.state);
   }

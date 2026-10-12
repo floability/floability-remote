@@ -28,7 +28,14 @@ class StaticAssetTests(unittest.TestCase):
                 self.assertEqual(self.client.get(asset).status_code, 200)
 
     def test_javascript_modules_resolve(self):
-        for module in ("api.js", "connection.js", "form.js", "main.js", "run.js"):
+        for module in (
+            "api.js",
+            "backpack.js",
+            "connection.js",
+            "form.js",
+            "main.js",
+            "run.js",
+        ):
             with self.subTest(module=module):
                 response = self.client.get(f"/static/js/{module}")
                 self.assertEqual(response.status_code, 200)
@@ -56,8 +63,10 @@ class FrontendBoundaryTests(unittest.TestCase):
             {
                 "connection.target",
                 "connection.identity_file",
+                "backpack.source_type",
                 "backpack.repository",
                 "backpack.ref",
+                "backpack.local_path",
                 "entrypoint",
                 "environment.env_name",
                 "remote_root",
@@ -106,6 +115,20 @@ class FrontendBoundaryTests(unittest.TestCase):
         self.assertIn("renderConnectionSidebar", source)
         self.assertIn("api.checkCluster", source)
         self.assertIn("setBatchAvailability(report.available_batch_types)", source)
+
+    def test_backpack_sources_and_local_editing_controls_are_present(self):
+        html = (STATIC / "index.html").read_text()
+        for label in ("Git repository", "Local folder", "ZIP file"):
+            self.assertIn(label, html)
+        for control in (
+            'id="choose-folder"',
+            'id="choose-zip"',
+            'id="clone-backpack"',
+            'id="open-folder"',
+            'id="open-vscode"',
+            'id="discard-changes"',
+        ):
+            self.assertIn(control, html)
 
 
 class WebCommandParserTests(unittest.TestCase):

@@ -14,7 +14,8 @@ config.py        RunConfig and validation (run_config_issues, validate_run_confi
 events.py        Event, EventSink, Emitter, Redactor, RedactingSink
 interaction.py   ConfirmationRequest/Confirm callback and CancelToken
 environment.py   remote Conda and Floability setup
-workspace.py     remote run directory and backpack clone
+workspace.py     remote run directory and backpack clone/upload
+local_backpack.py local folder/ZIP inspection, packing, upload, clone, and provenance
 workflow.py      RemoteWorkflow: run/execute orchestration, tunnel, cleanup
 ```
 
@@ -113,7 +114,12 @@ Request (`RunRequest`; omitted fields take CLI defaults):
 {
   "mode": "run",
   "connection": { "target": "user@login.example.edu", "identity_file": null },
-  "backpack": { "repository": "https://github.com/floability-hub/matrix-multiplication.git", "ref": "" },
+  "backpack": {
+    "source_type": "git",
+    "repository": "https://github.com/floability-hub/matrix-multiplication.git",
+    "ref": "",
+    "local_path": ""
+  },
   "batch_type": "slurm",
   "environment": {
     "env_name": "floability-remote-managed",
@@ -152,6 +158,33 @@ When `valid` is true, `command` is the equivalent shell-quoted
 `floability-remote` command produced by `cli.cli_command`. An issue with a
 `flag` describes the field relative to its name; the CLI prints
 `<flag> <message>`, and the web client prints `<field label> <message>`.
+
+### Local backpacks
+
+The browser uses these authenticated local-only routes to inspect and stage
+folders selected with the browser file picker. A typed path can be inspected
+directly. The CLI calls the same `local_backpack.py` inspection and packing
+service without using HTTP.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/v1/backpacks/inspect` | Inspect `{"path": "..."}` and return name, source type, file count, bytes, `workflow_found`, `valid`, and problems. |
+| `POST /api/v1/backpacks/staging` | Create an app-managed local staging directory for a browser-selected folder. |
+| `PUT /api/v1/backpacks/staging/{id}/files?path=...` | Add one raw file body to that staging directory. |
+| `POST /api/v1/backpacks/staging/{id}/complete` | Inspect and return the staged folder. |
+| `POST /api/v1/backpacks/zip?filename=...` | Stage and inspect one raw ZIP body. |
+| `POST /api/v1/backpacks/clone` | Clone `repository` and optional `ref` into an optional `destination`. |
+| `POST /api/v1/backpacks/status` | Return local clone origin, ref, commit, and changed-file count for `{"path": "..."}`. |
+| `POST /api/v1/backpacks/discard` | Discard tracked Git changes in the selected local clone. |
+| `POST /api/v1/backpacks/open` | Open a local path with `editor` set to `folder` or `vscode`. |
+
+Folder and ZIP sources reject symlinks, unsafe archive paths, more than 5,000
+files, more than 200 MB of file data, and backpacks without `workflow/`.
+`.git`, `.venv`, `__pycache__`, `.ipynb_checkpoints`, and `.DS_Store` are not
+uploaded. Every run repacks the source, uploads it as one tar stream over the
+open SSH connection, and writes local-source provenance to the remote
+`source.json` run record. That record is included in the run's downloadable
+files.
 
 ### Connection
 
@@ -231,7 +264,7 @@ and closes the connection.
 | `POST /api/v1/runs/{id}/confirmations/{id}` | `{"approved": true}` → `204`. |
 
 `RunResponse` fields: `id`, `mode`, `state` (`running`, `completed`, `failed`,
-`cancelled`), `target`, `repository`, `ref`, `batch_type`, `entrypoint`,
+`cancelled`), `target`, `source_type`, `repository`, `local_path`, `ref`, `batch_type`, `entrypoint`,
 `created_at`, `finished_at`, `message`, `result` (`run_dir`, `backpack_dir`,
 `log_path`), `jupyter_url`, `confirmation`, `cancel_requested`, and
 `event_count`.

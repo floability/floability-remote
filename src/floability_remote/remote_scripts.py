@@ -288,6 +288,40 @@ printf '__FLOABILITY_REMOTE_BACKPACK__=%s\n' "$backpack_dir"
 """
 
 
+UPLOAD_BACKPACK = r"""
+set -euo pipefail
+
+run_dir=$1
+
+case "$run_dir" in
+    "~/"*) run_dir="$HOME/${run_dir#\~/}" ;;
+esac
+
+run_id=${run_dir##*/}
+backpack_dir="$run_dir/backpack"
+if [ -e "$run_dir" ]; then
+    echo "Remote run directory already exists: $run_dir" >&2
+    exit 2
+fi
+trap 'rm -rf -- "$run_dir"' ERR
+mkdir -p "$backpack_dir"
+printf '%s\n' "$run_id" > "$run_dir/.floability-remote-run"
+tar -xf - -C "$backpack_dir" --no-same-owner --no-same-permissions
+
+printf '__FLOABILITY_REMOTE_RUN_DIR__=%s\n' "$run_dir"
+printf '__FLOABILITY_REMOTE_BACKPACK__=%s\n' "$backpack_dir"
+"""
+
+
+WRITE_RUN_SOURCE = r"""
+set -euo pipefail
+run_dir=$1
+source_json=$2
+test -f "$run_dir/.floability-remote-run"
+printf '%s\n' "$source_json" > "$run_dir/source.json"
+"""
+
+
 LAUNCH_FLOABILITY = r"""
 set -u
 
@@ -355,7 +389,7 @@ if [ "${#extra_options[@]}" -gt 0 ]; then
 fi
 
 echo "Remote run directory: $run_dir"
-echo "Remote command: floability $mode --backpack <clone> --batch-type $batch_type"
+echo "Remote command: floability $mode --backpack <backpack> --batch-type $batch_type"
 
 # Bash starts background jobs with SIGINT ignored, and Python then never raises
 # KeyboardInterrupt, so Floability could not clean up on SIGINT. Restore the
@@ -662,6 +696,9 @@ if instance_dir is not None and not truncated:
     if not truncated:
         add_tree("records", instance_dir / "metrics", "metrics")
 
+if not truncated:
+    add("records", "source.json", run_dir / "source.json")
+
 files.sort(key=lambda item: (item["group"], item["path"]))
 payload = {
     "python_path": sys.executable,
@@ -741,6 +778,8 @@ ALL = (
     INSTALL_MINIFORGE,
     PREPARE_ENVIRONMENT,
     CLONE_BACKPACK,
+    UPLOAD_BACKPACK,
+    WRITE_RUN_SOURCE,
     LAUNCH_FLOABILITY,
     STOP_FLOABILITY,
     CHECK_CLUSTER_STORAGE,

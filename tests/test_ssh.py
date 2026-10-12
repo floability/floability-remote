@@ -1,6 +1,7 @@
 import io
 import socket
 import unittest
+from unittest import mock
 
 from floability_remote.errors import RemoteRunError
 from floability_remote.ssh import SSHSession, choose_local_port, shell_command
@@ -41,6 +42,24 @@ class SSHUtilityTests(unittest.TestCase):
         port = choose_local_port(None)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.bind(("127.0.0.1", port))
+
+    def test_binary_stream_is_sent_to_remote_bash_command(self):
+        session = object.__new__(SSHSession)
+        session.ssh = "ssh"
+        session.target = "user@host"
+        session.identity_file = None
+        session.ssh_options = ()
+        session.askpass_env = None
+        session.control_path = "/tmp/control"
+        source = io.BytesIO(b"tar data")
+        completed = mock.Mock(returncode=0, stdout=b"uploaded\n")
+        with mock.patch("floability_remote.ssh.subprocess.run", return_value=completed) as run:
+            result = session.run_stream("cat >/tmp/archive", ("one",), source)
+        self.assertEqual(result.stdout, "uploaded\n")
+        self.assertIs(run.call_args.kwargs["stdin"], source)
+        command = run.call_args.args[0][-1]
+        self.assertIn("bash -c", command)
+        self.assertIn("cat >/tmp/archive", command)
 
 
 if __name__ == "__main__":

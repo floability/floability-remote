@@ -49,7 +49,7 @@ Floability concepts see
  ┌───────────────────────────────────────────┐          ┌──────────────────────────────────┐
  │ Browser                                   │          │ sshd                             │
  │  ├─ Floability Remote page ──┐ HTTP       │          │  │                               │
- │  └─ JupyterLab tab ───────┐  │ 127.0.0.1  │          │  ├─ bash -s  (probe, clone, ...) │
+ │  └─ JupyterLab tab ───────┐  │ 127.0.0.1  │          │  ├─ bash (probe, clone/upload)   │
  │                           │  ▼            │          │  ├─ bash -s  LAUNCH_FLOABILITY   │
  │  floability-remote web    │  FastAPI      │          │  │     └─ floability run/execute │
  │   (or the CLI)            │  + services   │  ONE SSH │  │          ├─ TaskVine manager  │

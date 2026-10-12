@@ -9,7 +9,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, Mapping, Optional, Sequence
+from typing import BinaryIO, Callable, Mapping, Optional, Sequence
 
 from .errors import RemoteRunError
 from .output import non_marker_output
@@ -247,6 +247,31 @@ class SSHSession:
             raise RemoteRunError(
                 f"Remote file download failed with status {result.returncode}.{suffix}"
             )
+
+    def run_stream(
+        self,
+        script: str,
+        arguments: Sequence[str],
+        stream: BinaryIO,
+    ) -> subprocess.CompletedProcess:
+        """Feed binary input to a remote Bash command and capture its output."""
+        remote_command = shell_command("bash", ("-c", script, "--", *arguments))
+        result = subprocess.run(
+            [*self._base(), self.target, remote_command],
+            stdin=stream,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=self.promptless,
+            check=False,
+        )
+        output = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+        result.stdout = output
+        if result.returncode != 0:
+            detail = f"\n{output.strip()}" if output.strip() else ""
+            raise RemoteRunError(
+                f"Remote backpack upload failed with status {result.returncode}.{detail}"
+            )
+        return result
 
     def start_tunnel(self, local_port: int, remote_port: int) -> subprocess.Popen:
         forwarding = f"127.0.0.1:{local_port}:127.0.0.1:{remote_port}"

@@ -1,6 +1,8 @@
 import contextlib
 import io
+import tempfile
 import unittest
+from pathlib import Path
 
 from floability_remote.cli import build_parser, validate_args
 from floability_remote.errors import RemoteRunError
@@ -96,6 +98,34 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.env_name, "custom-env")
         self.assertEqual(args.floability_version, "0.4.0")
         self.assertEqual(args.base_dir, "/scratch/floability")
+
+    def test_clone_arguments(self):
+        args = build_parser().parse_args(
+            ["clone", "https://github.com/example/backpack.git", "--ref", "v1", "--into", "./copy"]
+        )
+        self.assertEqual(args.command, "clone")
+        self.assertEqual(args.repository, "https://github.com/example/backpack.git")
+        self.assertEqual(args.ref, "v1")
+        self.assertEqual(args.into, "./copy")
+
+    def test_local_backpack_folder_is_detected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "workflow").mkdir()
+            (root / "workflow" / "main.py").write_text("print('ok')")
+            args = self.parse("execute")
+            args.backpack = str(root)
+            config = validate_args(args)
+        self.assertEqual(config.backpack.source_type, "folder")
+        self.assertEqual(config.backpack.local_path, str(root.resolve()))
+
+    def test_invalid_local_backpack_is_rejected_before_connecting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.parse("execute")
+            args.backpack = temporary
+            with self.assertRaises(RemoteRunError) as caught:
+                validate_args(args)
+        self.assertIn("workflow/", str(caught.exception))
 
 
 if __name__ == "__main__":

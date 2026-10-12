@@ -1,9 +1,11 @@
 import contextlib
 import io
 import queue
+import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -65,6 +67,16 @@ class FakeSession:
         self.started = True
 
     def run_script(self, script, arguments=(), **kwargs):
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "__FLOABILITY_REMOTE_RUN_DIR__=/remote/run\n"
+                "__FLOABILITY_REMOTE_BACKPACK__=/remote/run/backpack\n"
+            ),
+        )
+
+    def run_stream(self, script, arguments, stream):
+        self.uploaded = stream.read()
         return SimpleNamespace(
             returncode=0,
             stdout=(
@@ -175,6 +187,23 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("execution completed successfully", output)
         self.assertIn("Remote backpack and outputs: /remote/run/backpack", output)
         self.assertNotIn("raw task output", output)
+
+    def test_local_backpack_is_uploaded_instead_of_cloned(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "workflow").mkdir()
+            (root / "workflow" / "main.py").write_text("print('ok')")
+            args = self.arguments("execute")
+            args.backpack = str(root)
+            FakeSession.process_output = ""
+            captured = io.StringIO()
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
+                stack.enter_context(mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE))
+                stack.enter_context(contextlib.redirect_stdout(captured))
+                cli_workflow(args).start()
+        self.assertIn("Uploading backpack from", captured.getvalue())
+        self.assertGreater(len(FakeSession.last_instance.uploaded), 0)
 
     def test_floability_cache_directories_are_forwarded(self):
         FakeSession.process_output = ""

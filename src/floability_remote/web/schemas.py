@@ -40,8 +40,10 @@ class EnvironmentModel(StrictModel):
 
 
 class BackpackModel(StrictModel):
-    repository: str
+    source_type: str = "git"
+    repository: str = ""
     ref: str = ""
+    local_path: str = ""
 
 
 class FloabilityOptionModel(StrictModel):
@@ -73,7 +75,10 @@ class RunRequest(StrictModel):
                 identity_file=self.connection.identity_file or None,
             ),
             backpack=BackpackSource(
-                repository=self.backpack.repository, ref=self.backpack.ref
+                source_type=self.backpack.source_type,
+                repository=self.backpack.repository,
+                ref=self.backpack.ref,
+                local_path=self.backpack.local_path,
             ),
             batch_type=self.batch_type,
             environment=EnvironmentConfig(
@@ -111,6 +116,51 @@ class ValidationResponse(BaseModel):
     command: Optional[str] = Field(
         None, description="Equivalent CLI command when the configuration is valid."
     )
+
+
+class BackpackPathRequest(StrictModel):
+    path: str
+
+
+class BackpackInspectionResponse(BaseModel):
+    path: str
+    name: str
+    source_type: str
+    file_count: int
+    total_bytes: int
+    workflow_found: bool
+    valid: bool
+    problems: List[str]
+
+
+class BackpackStagingResponse(BaseModel):
+    upload_id: str
+    path: str
+
+
+class BackpackCloneRequest(StrictModel):
+    repository: str
+    ref: str = ""
+    destination: str = ""
+
+
+class BackpackProvenanceModel(BaseModel):
+    local_path: str
+    original_repository: str = ""
+    original_ref: str = ""
+    commit: str = ""
+    uncommitted_changes: int = 0
+
+
+class BackpackCloneResponse(BaseModel):
+    path: str
+    inspection: BackpackInspectionResponse
+    provenance: BackpackProvenanceModel
+
+
+class BackpackOpenRequest(StrictModel):
+    path: str
+    editor: str = "folder"
 
 
 class HealthResponse(BaseModel):
@@ -227,6 +277,8 @@ class RunResponse(BaseModel):
     state: str = Field(description="running, completed, failed, or cancelled.")
     target: str
     repository: str
+    source_type: str = "git"
+    local_path: str = ""
     ref: str
     batch_type: str
     entrypoint: str

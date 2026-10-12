@@ -765,3 +765,31 @@ a.button { text-decoration: none; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Local backpack selection ------------------------------------------------ */
+.input-action {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.input-action input { flex: 1; }
+
+.backpack-summary {
+  margin: 0.85rem 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.06));
+  font-size: 0.9rem;
+}
+
+.backpack-summary[data-state="valid"] { border-color: var(--success, #32875b); }
+.backpack-summary[data-state="invalid"] { border-color: var(--danger, #b54b4b); }
+
+.clone-panel {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.clone-panel summary { cursor: pointer; font-weight: 600; }

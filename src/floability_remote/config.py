@@ -37,10 +37,16 @@ class EnvironmentConfig:
 
 @dataclass(frozen=True)
 class BackpackSource:
-    """A public Git repository and optional branch, tag, or commit."""
+    """A Git repository or a local folder/ZIP backpack."""
 
-    repository: str
+    repository: str = ""
     ref: str = ""
+    source_type: str = "git"
+    local_path: str = ""
+
+    @property
+    def display_location(self) -> str:
+        return self.repository if self.source_type == "git" else self.local_path
 
 
 @dataclass(frozen=True)
@@ -158,15 +164,38 @@ def run_config_issues(config: RunConfig) -> List[ValidationIssue]:
 
     issues.extend(_target_issues(config.connection))
 
-    repository = config.backpack.repository
-    if (
-        not repository.strip()
-        or repository.startswith("-")
-        or _has_control_characters(repository)
-    ):
-        problem(
-            "backpack.repository", "is not a valid Git repository URL.", "--backpack"
-        )
+    source = config.backpack
+    if source.source_type not in ("git", "folder", "zip"):
+        problem("backpack.source_type", "must be git, folder, or zip.")
+    if source.source_type == "git":
+        repository = source.repository
+        if (
+            not repository.strip()
+            or repository.startswith("-")
+            or _has_control_characters(repository)
+        ):
+            problem(
+                "backpack.repository", "is not a valid Git repository URL.", "--backpack"
+            )
+    else:
+        local_path = source.local_path
+        if (
+            not local_path.strip()
+            or local_path.startswith("-")
+            or _has_control_characters(local_path)
+        ):
+            problem("backpack.local_path", "is not a valid local path.", "--backpack")
+        else:
+            from .local_backpack import inspect as inspect_backpack
+
+            for message in inspect_backpack(local_path).problems:
+                problem("backpack.local_path", message, "--backpack")
+        if source.ref:
+            problem(
+                "backpack.ref",
+                "can only be used with a Git repository source.",
+                "--ref",
+            )
 
     ref = config.backpack.ref
     if ref.startswith("-") or _has_control_characters(ref):
@@ -329,4 +358,19 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     issues = run_config_issues(config)
     if issues:
         raise ConfigError(issues)
-    return replace(config, connection=normalize_connection(config.connection))
+    source = config.backpack
+    if source.source_type != "git":
+        source = replace(
+            source,
+            local_path=str(Path(source.local_path).expanduser().resolve()),
+        )
+        from .local_backpack import inspect as inspect_backpack
+
+        report = inspect_backpack(source.local_path)
+        if not report.valid:
+            raise RemoteRunError(" ".join(report.problems))
+    return replace(
+        config,
+        connection=normalize_connection(config.connection),
+        backpack=source,
+    )

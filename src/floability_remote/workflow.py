@@ -75,7 +75,7 @@ class RemoteWorkflow:
         try:
             self._connect()
             probe = self._prepare_environment()
-            self.workspace = self._clone_backpack()
+            self.workspace = self._prepare_backpack()
             self._launch(probe)
             status = self._monitor()
             self._checkpoint()
@@ -146,12 +146,17 @@ class RemoteWorkflow:
             self.session, self.config.environment, self.emitter, self.confirm
         )
 
-    def _clone_backpack(self) -> RemoteWorkspace:
+    def _prepare_backpack(self) -> RemoteWorkspace:
         self._checkpoint()
+        source = self.config.backpack
+        if source.source_type == "git":
+            message = f"Cloning backpack from {source.repository}..."
+        else:
+            message = f"Uploading backpack from {source.local_path}..."
         self.emitter.step(
             3,
             self.total_steps,
-            f"Cloning backpack from {self.config.backpack.repository}...",
+            message,
         )
         return create_workspace(
             self.session, self.config.backpack, self.config.remote_root, self.emitter
