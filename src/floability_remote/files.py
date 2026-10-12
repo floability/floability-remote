@@ -19,7 +19,7 @@ from .ssh import SSHSession
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
 GROUP_ORDER = ("command", "workflow", "logs", "records")
 GROUP_LABELS = {
-    "command": "Run command",
+    "command": "Command log",
     "workflow": "Workflow and results",
     "logs": "Logs",
     "records": "Run records",

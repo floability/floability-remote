@@ -97,7 +97,7 @@ class FrontendBoundaryTests(unittest.TestCase):
         html = (STATIC / "index.html").read_text()
         self.assertIn('id="run-files"', html)
         source = (STATIC / "js" / "run.js").read_text()
-        for group in ("Run command", "Workflow and results", "Logs", "Run records"):
+        for group in ("Command log", "Workflow and results", "Logs", "Run records"):
             self.assertIn(group, source)
         self.assertNotIn("section.open = true", source)
 
@@ -121,7 +121,9 @@ class FrontendBoundaryTests(unittest.TestCase):
         for label in ("Git repository", "Local folder", "ZIP file"):
             self.assertIn(label, html)
         for control in (
-            'id="choose-folder"',
+            'id="browse-folder"',
+            'id="folder-browser"',
+            'id="workflow-files"',
             'id="choose-zip"',
             'id="clone-backpack"',
             'id="open-folder"',
@@ -129,6 +131,10 @@ class FrontendBoundaryTests(unittest.TestCase):
             'id="discard-changes"',
         ):
             self.assertIn(control, html)
+        # Folders are referenced in place, never uploaded file by file.
+        self.assertNotIn("webkitdirectory", html)
+        # Shown only after the server reports the `code` command.
+        self.assertIn('id="open-vscode" hidden', html)
 
 
 class WebCommandParserTests(unittest.TestCase):

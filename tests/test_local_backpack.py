@@ -15,6 +15,7 @@ from floability_remote.local_backpack import (
     clone,
     discard_changes,
     inspect,
+    list_directories,
     pack,
     provenance,
     upload,
@@ -30,6 +31,24 @@ class LocalBackpackTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_inspection_lists_workflow_files_sorted(self):
+        (self.root / "workflow" / "b.ipynb").write_text("{}")
+        (self.root / "workflow" / "__pycache__").mkdir()
+        (self.root / "workflow" / "__pycache__" / "x.pyc").write_bytes(b"x")
+        self.assertEqual(inspect(self.root).workflow_files, ("b.ipynb", "main.py"))
+
+    def test_list_directories_skips_hidden_and_symlinked_folders(self):
+        parent = Path(self.temporary.name).resolve()
+        (parent / ".cache").mkdir()
+        (parent / "plain").mkdir()
+        (parent / "link").symlink_to(self.root, target_is_directory=True)
+        listing = list_directories(parent)
+        self.assertEqual(
+            [(entry.name, entry.is_backpack) for entry in listing.directories],
+            [("example", True), ("plain", False)],
+        )
+        self.assertTrue(list_directories(self.root).is_backpack)
 
     def test_inspects_and_packs_folder_while_skipping_generated_files(self):
         (self.root / ".git").mkdir()
@@ -69,6 +88,20 @@ class LocalBackpackTests(unittest.TestCase):
             zipped.writestr("project-main/.git/config", "skip")
         report = inspect(archive)
         self.assertTrue(report.valid, report.problems)
+        with pack(archive) as stream:
+            with tarfile.open(fileobj=stream, mode="r") as packed:
+                self.assertEqual(packed.getnames(), ["workflow", "workflow/main.py"])
+
+    def test_strips_wrapper_when_zip_lists_directory_entries(self):
+        # Finder, `zip -r`, and GitHub archives include "project/" entries.
+        archive = Path(self.temporary.name) / "finder.zip"
+        with zipfile.ZipFile(archive, "w") as zipped:
+            zipped.writestr("project/", "")
+            zipped.writestr("project/workflow/", "")
+            zipped.writestr("project/workflow/main.py", "print('ok')")
+        report = inspect(archive)
+        self.assertTrue(report.valid, report.problems)
+        self.assertEqual(report.workflow_files, ("main.py",))
         with pack(archive) as stream:
             with tarfile.open(fileobj=stream, mode="r") as packed:
                 self.assertEqual(packed.getnames(), ["workflow", "workflow/main.py"])

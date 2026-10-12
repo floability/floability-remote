@@ -2,6 +2,7 @@
 
 import subprocess
 import threading
+from pathlib import Path
 from typing import Optional, Tuple
 
 from . import remote_scripts
@@ -151,6 +152,10 @@ class RemoteWorkflow:
         source = self.config.backpack
         if source.source_type == "git":
             message = f"Cloning backpack from {source.repository}..."
+        elif source.source_type == "zip":
+            # A ZIP chosen in the browser lives in a temporary upload folder;
+            # its file name is the part the user recognizes.
+            message = f"Uploading backpack from {Path(source.local_path).name}..."
         else:
             message = f"Uploading backpack from {source.local_path}..."
         self.emitter.step(

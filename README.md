@@ -155,8 +155,10 @@ From the browser you can:
 - check whether the selected Floability environment and required remote tools
   are ready, and inspect free filesystem space and available quota reporting;
 - validate a configuration and copy the equivalent CLI command;
-- choose a Git repository, local folder, or ZIP backpack; copy a Git backpack
-  locally for editing; and open a local copy in the file browser or VS Code;
+- choose a Git repository, a local folder (with a built-in folder browser), or
+  a ZIP file, which runs as it is; use **Clone to this computer and edit** for
+  a Git backpack; open a local folder in the file browser or VS Code; and pick
+  the workflow file from the files in `workflow/`;
 - execute a backpack, follow its progress and full log, approve a Miniforge
   installation, and cancel with remote cleanup;
 - start an interactive run and open JupyterLab from the **Open JupyterLab**

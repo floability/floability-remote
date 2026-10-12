@@ -1,39 +1,50 @@
-"""Inspect and stage backpacks that live on the user's computer."""
+"""Find, clone, and inspect backpacks that live on the user's computer."""
 
-import re
 import shutil
 import tempfile
 import uuid
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from fastapi import APIRouter, Request, Response
 
 from ...errors import RemoteRunError
 from ...local_backpack import (
     MAX_BYTES,
-    MAX_FILES,
-    SKIPPED_NAMES,
+    CloneResult,
     clone,
     discard_changes,
     inspect,
+    list_directories,
     open_local,
     provenance,
 )
 from ..errors import ApiError
 from ..schemas import (
-    BackpackInspectionResponse,
+    BackpackBrowseRequest,
+    BackpackBrowseResponse,
     BackpackCloneRequest,
     BackpackCloneResponse,
+    BackpackInspectionResponse,
     BackpackOpenRequest,
-    BackpackProvenanceModel,
     BackpackPathRequest,
-    BackpackStagingResponse,
+    BackpackProvenanceModel,
+    DirectoryModel,
 )
 
 
 router = APIRouter(prefix="/backpacks", tags=["backpacks"])
-STAGING_ROOT = Path(tempfile.gettempdir()) / "floability-remote-uploads"
-UPLOAD_ID = re.compile(r"[0-9a-f]{32}")
+
+# Uploaded ZIPs are kept here, unchanged, because a browser cannot reveal the
+# file's own path; runs read the archive from this copy.
+UPLOAD_ROOT = Path(tempfile.gettempdir()) / "floability-remote-uploads"
+
+
+def _upload_name(filename: str) -> str:
+    name = "".join(
+        character if character.isalnum() or character in "._-" else "-"
+        for character in Path(filename).name
+    ).strip(".-")
+    return name if name.lower().endswith(".zip") else "backpack.zip"
 
 
 def inspection_response(path: Path) -> BackpackInspectionResponse:
@@ -47,6 +58,7 @@ def inspection_response(path: Path) -> BackpackInspectionResponse:
         workflow_found=report.workflow_found,
         valid=report.valid,
         problems=list(report.problems),
+        workflow_files=list(report.workflow_files),
     )
 
 
@@ -54,29 +66,12 @@ def provenance_response(path: Path) -> BackpackProvenanceModel:
     return BackpackProvenanceModel(**provenance(path).__dict__)
 
 
-def staging_path(upload_id: str) -> Path:
-    if not UPLOAD_ID.fullmatch(upload_id):
-        raise ApiError(404, "upload_not_found", "The local backpack upload was not found.")
-    path = STAGING_ROOT / upload_id
-    if not path.is_dir():
-        raise ApiError(404, "upload_not_found", "The local backpack upload was not found.")
-    return path
-
-
-def safe_relative_path(raw: str) -> PurePosixPath:
-    normalized = raw.replace("\\", "/")
-    path = PurePosixPath(normalized)
-    if (
-        not normalized
-        or path.is_absolute()
-        or ".." in path.parts
-        or (len(normalized) >= 2 and normalized[0].isalpha() and normalized[1] == ":")
-    ):
-        raise ApiError(422, "unsafe_path", f"Unsafe local backpack path: {raw}")
-    parts = tuple(part for part in path.parts if part not in ("", "."))
-    if not parts or any(part in SKIPPED_NAMES for part in parts):
-        raise ApiError(422, "skipped_path", f"This path is not included in backpacks: {raw}")
-    return PurePosixPath(*parts)
+def copy_response(result: CloneResult) -> BackpackCloneResponse:
+    return BackpackCloneResponse(
+        path=result.path,
+        inspection=inspection_response(Path(result.path)),
+        provenance=BackpackProvenanceModel(**result.provenance.__dict__),
+    )
 
 
 @router.post("/inspect", response_model=BackpackInspectionResponse)
@@ -84,67 +79,53 @@ def inspect_path(body: BackpackPathRequest) -> BackpackInspectionResponse:
     return inspection_response(Path(body.path).expanduser())
 
 
-@router.post("/staging", response_model=BackpackStagingResponse, status_code=201)
-def create_staging() -> BackpackStagingResponse:
-    STAGING_ROOT.mkdir(parents=True, exist_ok=True)
-    upload_id = uuid.uuid4().hex
-    path = STAGING_ROOT / upload_id
-    path.mkdir(mode=0o700)
-    return BackpackStagingResponse(upload_id=upload_id, path=str(path))
-
-
-@router.put("/staging/{upload_id}/files", status_code=204)
-async def upload_file(upload_id: str, path: str, request: Request) -> Response:
-    root = staging_path(upload_id)
-    relative = safe_relative_path(path)
-    existing_files = sum(1 for item in root.rglob("*") if item.is_file())
-    if existing_files >= MAX_FILES:
-        raise ApiError(413, "too_many_files", f"Backpacks may contain at most {MAX_FILES:,} files.")
-    total = sum(item.stat().st_size for item in root.rglob("*") if item.is_file())
-    destination = root.joinpath(*relative.parts)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    written = 0
+@router.post("/browse", response_model=BackpackBrowseResponse)
+def browse(body: BackpackBrowseRequest) -> BackpackBrowseResponse:
+    """List subfolders on this computer so the page can pick a real folder path."""
     try:
-        with destination.open("xb") as output:
-            async for chunk in request.stream():
-                written += len(chunk)
-                if total + written > MAX_BYTES:
-                    raise ApiError(413, "upload_too_large", "Backpacks may be at most 200 MB.")
-                output.write(chunk)
-    except FileExistsError as error:
-        raise ApiError(409, "duplicate_path", f"Duplicate backpack path: {path}") from error
-    except Exception:
-        destination.unlink(missing_ok=True)
-        raise
-    return Response(status_code=204)
-
-
-@router.post("/staging/{upload_id}/complete", response_model=BackpackInspectionResponse)
-def complete_staging(upload_id: str) -> BackpackInspectionResponse:
-    return inspection_response(staging_path(upload_id))
+        listing = list_directories(body.path)
+    except RemoteRunError as error:
+        raise ApiError(422, "browse_failed", str(error)) from error
+    return BackpackBrowseResponse(
+        path=listing.path,
+        parent=listing.parent,
+        is_backpack=listing.is_backpack,
+        directories=[
+            DirectoryModel(name=entry.name, path=entry.path, is_backpack=entry.is_backpack)
+            for entry in listing.directories
+        ],
+        truncated=listing.truncated,
+    )
 
 
 @router.post("/zip", response_model=BackpackInspectionResponse, status_code=201)
 async def upload_zip(filename: str, request: Request) -> BackpackInspectionResponse:
+    """Keep an uploaded ZIP unchanged and return its inspection.
+
+    Runs upload the archive's files as they are; nothing is extracted on this
+    computer. Invalid archives are not kept.
+    """
     if not filename.lower().endswith(".zip"):
         raise ApiError(422, "not_zip", "Choose a ZIP file.")
-    STAGING_ROOT.mkdir(parents=True, exist_ok=True)
-    upload_id = uuid.uuid4().hex
-    directory = STAGING_ROOT / upload_id
+    UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    directory = UPLOAD_ROOT / uuid.uuid4().hex
     directory.mkdir(mode=0o700)
-    destination = directory / "backpack.zip"
+    archive = directory / _upload_name(filename)
     written = 0
     try:
-        with destination.open("xb") as output:
+        with archive.open("xb") as output:
             async for chunk in request.stream():
                 written += len(chunk)
                 if written > MAX_BYTES:
                     raise ApiError(413, "upload_too_large", "ZIP files may be at most 200 MB.")
                 output.write(chunk)
-        return inspection_response(destination)
+        report = inspection_response(archive)
     except Exception:
         shutil.rmtree(directory, ignore_errors=True)
         raise
+    if not report.valid:
+        shutil.rmtree(directory, ignore_errors=True)
+    return report
 
 
 @router.post("/clone", response_model=BackpackCloneResponse, status_code=201)
@@ -153,12 +134,7 @@ def clone_repository(body: BackpackCloneRequest) -> BackpackCloneResponse:
         result = clone(body.repository, body.ref, body.destination)
     except RemoteRunError as error:
         raise ApiError(422, "clone_failed", str(error)) from error
-    path = Path(result.path)
-    return BackpackCloneResponse(
-        path=result.path,
-        inspection=inspection_response(path),
-        provenance=BackpackProvenanceModel(**result.provenance.__dict__),
-    )
+    return copy_response(result)
 
 
 @router.post("/status", response_model=BackpackProvenanceModel)

@@ -22,7 +22,7 @@ const RESULT_LABELS = {
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
 const FILE_GROUPS = {
-  command: "Run command",
+  command: "Command log",
   workflow: "Workflow and results",
   logs: "Logs",
   records: "Run records",

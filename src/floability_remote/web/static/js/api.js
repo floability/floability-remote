@@ -77,11 +77,7 @@ export const api = {
   meta: () => request("GET", "/meta"),
   validateRun: (config) => request("POST", "/runs/validate", config),
   inspectBackpack: (path) => request("POST", "/backpacks/inspect", { path }),
-  createBackpackStaging: () => request("POST", "/backpacks/staging"),
-  uploadBackpackFile: (uploadId, path, file) =>
-    rawRequest("PUT", `/backpacks/staging/${segment(uploadId)}/files?path=${segment(path)}`, file),
-  completeBackpackStaging: (uploadId) =>
-    request("POST", `/backpacks/staging/${segment(uploadId)}/complete`),
+  browseFolders: (path) => request("POST", "/backpacks/browse", { path }),
   uploadBackpackZip: (file) =>
     rawRequest("POST", `/backpacks/zip?filename=${segment(file.name)}`, file),
   cloneBackpack: (repository, ref, destination) =>

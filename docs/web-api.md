@@ -161,19 +161,21 @@ When `valid` is true, `command` is the equivalent shell-quoted
 
 ### Local backpacks
 
-The browser uses these authenticated local-only routes to inspect and stage
-folders selected with the browser file picker. A typed path can be inspected
-directly. The CLI calls the same `local_backpack.py` inspection and packing
-service without using HTTP.
+The browser uses these authenticated local-only routes to find, copy, and
+inspect backpacks on this computer. Folders are always used in place: the page
+picks a real path with a folder browser served by the local app, so each run
+uploads the folder's current files. Git clones become normal editable folders
+under `~/floability-backpacks/`. A chosen ZIP is kept unchanged in a private
+temporary folder (browsers cannot reveal its path) and each run uploads its
+files as they are. The CLI calls the same
+`local_backpack.py` service without using HTTP.
 
 | Method and path | Purpose |
 |---|---|
-| `POST /api/v1/backpacks/inspect` | Inspect `{"path": "..."}` and return name, source type, file count, bytes, `workflow_found`, `valid`, and problems. |
-| `POST /api/v1/backpacks/staging` | Create an app-managed local staging directory for a browser-selected folder. |
-| `PUT /api/v1/backpacks/staging/{id}/files?path=...` | Add one raw file body to that staging directory. |
-| `POST /api/v1/backpacks/staging/{id}/complete` | Inspect and return the staged folder. |
-| `POST /api/v1/backpacks/zip?filename=...` | Stage and inspect one raw ZIP body. |
-| `POST /api/v1/backpacks/clone` | Clone `repository` and optional `ref` into an optional `destination`. |
+| `POST /api/v1/backpacks/inspect` | Inspect `{"path": "..."}` and return name, source type, file count, bytes, `workflow_found`, `valid`, problems, and `workflow_files` (files inside `workflow/`, offered as entrypoints). |
+| `POST /api/v1/backpacks/browse` | List visible subfolders of `{"path": "..."}` (home when empty) with `parent`, and mark folders that contain `workflow/` as backpacks. Hidden folders and symlinks are omitted; at most 500 entries. |
+| `POST /api/v1/backpacks/zip?filename=...` | Keep one raw ZIP body unchanged and return its inspection; `path` is the stored archive used as the run's `local_path`. Invalid archives are reported and not kept. |
+| `POST /api/v1/backpacks/clone` | Clone `repository` and optional `ref` into an optional `destination` (default `~/floability-backpacks/<name>`). |
 | `POST /api/v1/backpacks/status` | Return local clone origin, ref, commit, and changed-file count for `{"path": "..."}`. |
 | `POST /api/v1/backpacks/discard` | Discard tracked Git changes in the selected local clone. |
 | `POST /api/v1/backpacks/open` | Open a local path with `editor` set to `folder` or `vscode`. |

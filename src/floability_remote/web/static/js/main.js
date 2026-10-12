@@ -500,6 +500,7 @@ async function start() {
   }
 
   features = meta.features;
+  backpackPicker.setVsCodeAvailable(meta.local_tools && meta.local_tools.vscode);
   const preferredMode = meta.modes.find((mode) => features[mode] && features[mode].available);
   renderChoices(form, meta, preferredMode);
   applyDefaults(form, meta.defaults);

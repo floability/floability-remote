@@ -110,8 +110,8 @@
             <p class="field-error" aria-live="polite"></p>
           </div>
 
-          <div class="field" data-field="connection.identity_file" data-label="Identity file">
-            <label for="identity-file">Identity file <span class="optional">optional</span></label>
+          <div class="field" data-field="connection.identity_file" data-label="SSH key file">
+            <label for="identity-file">SSH key file <span class="optional">optional</span></label>
             <input id="identity-file" name="connection.identity_file" type="text"
                    autocomplete="off" spellcheck="false" placeholder="~/.ssh/id_ed25519">
             <p class="field-error" aria-live="polite"></p>
@@ -173,7 +173,7 @@
                 <option value="https://github.com/floability-hub/matrix-multiplication.git">
                 <option value="https://github.com/floability-hub/matrix-multiplication-script.git">
               </datalist>
-              <p class="hint">A public Git repository.</p>
+              <p class="hint">URL of a public Git repository.</p>
               <p class="field-error" aria-live="polite"></p>
             </div>
             <div class="field" data-field="backpack.ref" data-label="Branch, tag, or commit">
@@ -182,16 +182,22 @@
                      spellcheck="false" placeholder="default branch">
               <p class="field-error" aria-live="polite"></p>
             </div>
-            <details class="clone-panel">
-              <summary>Copy to my computer</summary>
-              <p class="hint">Create a local copy that you can edit before each run.</p>
-              <div class="field">
-                <label for="clone-destination">Location <span class="optional">optional</span></label>
-                <input id="clone-destination" type="text" autocomplete="off" spellcheck="false"
-                       placeholder="~/floability-backpacks/repository-name">
+            <details class="copy-panel">
+              <summary>Clone to this computer and edit</summary>
+              <div class="copy-panel-body">
+                <p class="hint">
+                  Makes a local clone you can edit. Each run uploads the current files.
+                </p>
+                <div class="field">
+                  <label for="clone-destination">Clone into</label>
+                  <input id="clone-destination" type="text" autocomplete="off" spellcheck="false"
+                         placeholder="~/floability-backpacks/repository-name">
+                </div>
+                <div>
+                  <button type="button" class="button secondary" id="clone-backpack">Clone and edit</button>
+                </div>
+                <p class="field-error" id="clone-error" aria-live="polite"></p>
               </div>
-              <button type="button" class="button secondary" id="clone-backpack">Copy repository</button>
-              <p class="field-error" id="clone-error" aria-live="polite"></p>
             </details>
           </div>
 
@@ -201,19 +207,31 @@
               <div class="input-action">
                 <input id="local-folder-path" name="backpack.local_path" type="text"
                        autocomplete="off" spellcheck="false" placeholder="~/floability-backpacks/my-backpack" disabled>
-                <button type="button" class="button secondary" id="choose-folder">Choose folder</button>
+                <button type="button" class="button secondary" id="browse-folder"
+                        aria-expanded="false" aria-controls="folder-browser">Browse…</button>
               </div>
-              <input id="folder-picker" type="file" webkitdirectory multiple hidden>
-              <p class="hint">Paste a path on this computer, or choose a folder.</p>
+              <p class="hint">A folder on this computer with a workflow/ folder. Each run uploads its current files.</p>
               <p class="field-error" aria-live="polite"></p>
             </div>
+            <div class="folder-browser" id="folder-browser" hidden>
+              <div class="folder-browser-head">
+                <button type="button" class="button secondary small" id="folder-up">↑ Up</button>
+                <code class="folder-browser-path" id="folder-browser-path"></code>
+              </div>
+              <ul class="folder-list" id="folder-list" aria-label="Folders"></ul>
+              <p class="hint" id="folder-browser-note" aria-live="polite"></p>
+              <div class="button-row">
+                <button type="button" class="button primary small" id="use-folder">Use this folder</button>
+                <button type="button" class="button ghost small" id="close-folder-browser">Cancel</button>
+              </div>
+            </div>
+            <p class="backpack-note" id="backpack-note" hidden aria-live="polite"></p>
             <div id="local-backpack-actions" hidden>
               <div class="button-row">
                 <button type="button" class="button secondary small" id="open-folder">Open folder</button>
-                <button type="button" class="button secondary small" id="open-vscode">Open in VS Code</button>
-                <button type="button" class="button ghost small" id="discard-changes" hidden>Discard changes</button>
+                <button type="button" class="button secondary small" id="open-vscode" hidden>Open in VS Code</button>
+                <button type="button" class="button ghost small" id="discard-changes" hidden>Discard edits</button>
               </div>
-              <p class="hint">Edit the files here; each run uploads the current version.</p>
               <p class="hint" id="git-status"></p>
             </div>
           </div>
@@ -221,7 +239,10 @@
           <div data-backpack-source="zip" hidden>
             <div class="field" data-field="backpack.local_path" data-label="ZIP file">
               <label>ZIP file</label>
-              <button type="button" class="button secondary" id="choose-zip">Choose ZIP</button>
+              <div class="copy-row">
+                <button type="button" class="button secondary" id="choose-zip">Choose ZIP…</button>
+                <p class="hint">A ZIP of a backpack on this computer. Each run uploads its files as they are.</p>
+              </div>
               <input id="zip-picker" type="file" accept=".zip,application/zip" hidden>
               <input id="local-zip-path" name="backpack.local_path" type="hidden" disabled>
               <p class="field-error" aria-live="polite"></p>
@@ -230,10 +251,14 @@
 
           <div class="backpack-summary" id="backpack-summary" hidden aria-live="polite"></div>
 
-          <div class="field" data-field="entrypoint" data-label="Entrypoint">
-            <label for="entrypoint">Entrypoint <span class="optional">optional</span></label>
+          <div class="field" data-field="entrypoint" data-label="Workflow file">
+            <label for="entrypoint">Workflow file <span class="optional">optional</span></label>
             <input id="entrypoint" name="entrypoint" type="text" autocomplete="off"
                    spellcheck="false" placeholder="file inside workflow/">
+            <div class="workflow-files" id="workflow-files" hidden>
+              <span class="hint">In workflow/:</span>
+              <div class="workflow-file-list" id="workflow-file-list"></div>
+            </div>
             <p class="field-error" aria-live="polite"></p>
           </div>
         </fieldset>
@@ -264,8 +289,8 @@
                 </summary>
                 <div class="advanced-group-body">
                   <div class="row">
-                    <div class="field" data-field="environment.env_name" data-label="Floability environment">
-                      <label for="env-name">Floability environment</label>
+                    <div class="field" data-field="environment.env_name" data-label="Conda environment name">
+                      <label for="env-name">Conda environment name</label>
                       <input id="env-name" name="environment.env_name" type="text" spellcheck="false">
                       <p class="field-error" aria-live="polite"></p>
                     </div>
@@ -355,8 +380,8 @@
                       <input id="jupyter-port" name="jupyter_port" type="number" min="1" max="65535" inputmode="numeric">
                       <p class="field-error" aria-live="polite"></p>
                     </div>
-                    <div class="field" data-field="local_port" data-label="Local port">
-                      <label for="local-port">Local port <span class="optional">optional</span></label>
+                    <div class="field" data-field="local_port" data-label="Local Jupyter port">
+                      <label for="local-port">Local Jupyter port <span class="optional">optional</span></label>
                       <input id="local-port" name="local_port" type="number" min="1" max="65535"
                              inputmode="numeric" placeholder="automatic">
                       <p class="field-error" aria-live="polite"></p>
@@ -388,7 +413,7 @@
           </div>
 
           <div class="actions">
-            <button type="submit" class="button secondary">Check configuration</button>
+            <button type="submit" class="button secondary">Check settings</button>
             <button type="button" class="button primary" id="start" disabled>Start</button>
             <p class="hint" id="start-note" aria-live="polite"></p>
           </div>

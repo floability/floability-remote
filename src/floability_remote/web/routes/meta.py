@@ -8,6 +8,7 @@ from ...config import (
     SUPPORTED_BATCH_TYPES,
     SUPPORTED_MODES,
 )
+from ...local_backpack import vscode_available
 from ..schemas import DefaultsModel, FeatureModel, MetaResponse
 
 
@@ -55,4 +56,6 @@ def meta() -> MetaResponse:
             jupyter_port=DEFAULT_JUPYTER_PORT,
         ),
         features=FEATURES,
+        # Checked on each request against the server process's own PATH.
+        local_tools={"vscode": vscode_available()},
     )

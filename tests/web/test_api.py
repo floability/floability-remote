@@ -1,6 +1,7 @@
 import shlex
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from floability_remote import __version__
@@ -30,6 +31,14 @@ class SystemEndpointTests(unittest.TestCase):
             self.assertTrue(meta["features"][available]["available"], available)
         self.assertTrue(meta["features"]["transfer"]["available"])
         self.assertEqual(meta["features"]["transfer"]["milestone"], "M5")
+
+    def test_meta_reports_whether_vscode_is_available(self):
+        for found, expected in (("/usr/local/bin/code", True), (None, False)):
+            with self.subTest(found=found), mock.patch(
+                "floability_remote.local_backpack.shutil.which", return_value=found
+            ):
+                meta = self.client.get("/api/v1/meta").json()
+            self.assertEqual(meta["local_tools"], {"vscode": expected})
 
     def test_openapi_is_versioned(self):
         schema = self.client.get("/api/v1/openapi.json").json()

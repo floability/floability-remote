@@ -131,11 +131,25 @@ class BackpackInspectionResponse(BaseModel):
     workflow_found: bool
     valid: bool
     problems: List[str]
+    workflow_files: List[str] = Field(default_factory=list)
 
 
-class BackpackStagingResponse(BaseModel):
-    upload_id: str
+class BackpackBrowseRequest(StrictModel):
+    path: str = ""
+
+
+class DirectoryModel(BaseModel):
+    name: str
     path: str
+    is_backpack: bool
+
+
+class BackpackBrowseResponse(BaseModel):
+    path: str
+    parent: Optional[str] = None
+    is_backpack: bool
+    directories: List[DirectoryModel]
+    truncated: bool
 
 
 class BackpackCloneRequest(StrictModel):
@@ -153,6 +167,8 @@ class BackpackProvenanceModel(BaseModel):
 
 
 class BackpackCloneResponse(BaseModel):
+    """A new editable folder cloned from a Git repository."""
+
     path: str
     inspection: BackpackInspectionResponse
     provenance: BackpackProvenanceModel
@@ -187,6 +203,10 @@ class MetaResponse(BaseModel):
     batch_types: List[str]
     defaults: DefaultsModel
     features: Dict[str, FeatureModel]
+    local_tools: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="Tools found on this computer, such as `vscode` for the `code` command.",
+    )
 
 
 class ConnectRequest(StrictModel):

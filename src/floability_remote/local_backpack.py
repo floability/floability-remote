@@ -30,6 +30,9 @@ SKIPPED_NAMES = {
     ".floability-remote-source.json",
 }
 SOURCE_RECORD = ".floability-remote-source.json"
+DEFAULT_LOCAL_ROOT = "~/floability-backpacks"
+MAX_WORKFLOW_FILES = 200
+MAX_LISTED_DIRECTORIES = 500
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,8 @@ class BackpackInspection:
     total_bytes: int
     workflow_found: bool
     problems: Tuple[str, ...] = ()
+    # Files inside workflow/, relative to it; candidates for the entrypoint.
+    workflow_files: Tuple[str, ...] = ()
 
     @property
     def valid(self) -> bool:
@@ -60,6 +65,24 @@ class BackpackProvenance:
 class CloneResult:
     path: str
     provenance: BackpackProvenance
+
+
+@dataclass(frozen=True)
+class DirectoryEntry:
+    name: str
+    path: str
+    is_backpack: bool
+
+
+@dataclass(frozen=True)
+class DirectoryListing:
+    """One folder on this computer and its visible subfolders."""
+
+    path: str
+    parent: Optional[str]
+    is_backpack: bool
+    directories: Tuple[DirectoryEntry, ...]
+    truncated: bool
 
 
 def _skipped(parts: Iterable[str]) -> bool:
@@ -107,10 +130,13 @@ def _directory_entries(root: Path) -> Iterator[Tuple[Path, PurePosixPath, int]]:
 
 def _zip_root(infos: List[zipfile.ZipInfo]) -> PurePosixPath:
     """Strip the single wrapper directory commonly used by GitHub ZIP files."""
+    # Decide from files only: ZIPs made by Finder, `zip`, and GitHub also list
+    # the wrapper directory itself ("project/"), which has a single part.
     paths = [
         path
         for info in infos
-        if (path := _safe_archive_path(info.filename)) is not None
+        if not info.is_dir()
+        and (path := _safe_archive_path(info.filename)) is not None
         and not _skipped(path.parts)
     ]
     if not paths:
@@ -149,6 +175,7 @@ def _inspection(path: Path) -> BackpackInspection:
     file_count = 0
     total_bytes = 0
     workflow_found = False
+    workflow_files: List[str] = []
     try:
         if path.is_symlink():
             raise RemoteRunError(f"Symlinks are not allowed: {path}")
@@ -178,9 +205,14 @@ def _inspection(path: Path) -> BackpackInspection:
             for relative, size in entries:
                 file_count += 1
                 total_bytes += size
-                workflow_found = workflow_found or (
-                    bool(relative.parts) and relative.parts[0] == "workflow"
-                )
+                in_workflow = bool(relative.parts) and relative.parts[0] == "workflow"
+                workflow_found = workflow_found or in_workflow
+                if (
+                    in_workflow
+                    and len(relative.parts) > 1
+                    and len(workflow_files) < MAX_WORKFLOW_FILES
+                ):
+                    workflow_files.append("/".join(relative.parts[1:]))
                 if file_count > MAX_FILES:
                     problems.append(f"Backpack contains more than {MAX_FILES:,} files.")
                     break
@@ -203,6 +235,7 @@ def _inspection(path: Path) -> BackpackInspection:
         total_bytes=total_bytes,
         workflow_found=workflow_found,
         problems=tuple(dict.fromkeys(problems)),
+        workflow_files=tuple(sorted(workflow_files)),
     )
 
 
@@ -314,12 +347,26 @@ def _repository_name(repository: str) -> str:
 
 def _write_source_record(path: Path, repository: str, ref: str) -> None:
     parent = path / ".git" if (path / ".git").is_dir() else path
-    (parent / SOURCE_RECORD).write_text(
-        json.dumps(
-            {"original_repository": repository, "original_ref": ref},
-            indent=2,
-        ) + "\n"
-    )
+    record = {"original_repository": repository, "original_ref": ref}
+    (parent / SOURCE_RECORD).write_text(json.dumps(record, indent=2) + "\n")
+
+
+def _extract_into(source: Path, destination: Path) -> None:
+    """Write a validated backpack's files into an existing empty folder."""
+    with pack(source) as stream:
+        with tarfile.open(fileobj=stream, mode="r") as archive:
+            for member in archive.getmembers():
+                if not member.isfile():
+                    continue
+                output = destination.joinpath(*PurePosixPath(member.name).parts)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                data = archive.extractfile(member)
+                if data is None:
+                    raise RemoteRunError(f"Could not read {member.name} from the archive.")
+                with data, output.open("xb") as target:
+                    shutil.copyfileobj(data, target)
+                if member.mode & 0o111:
+                    output.chmod(0o755)
 
 
 def _github_archive(repository: str, ref: str, destination: Path) -> None:
@@ -339,21 +386,7 @@ def _github_archive(repository: str, ref: str, destination: Path) -> None:
             with tempfile.NamedTemporaryFile(suffix=".zip") as temporary:
                 temporary.write(data)
                 temporary.flush()
-                report = inspect(temporary.name)
-                if not report.valid:
-                    raise RemoteRunError(" ".join(report.problems))
-                with pack(temporary.name) as stream:
-                    with tarfile.open(fileobj=stream, mode="r") as archive:
-                        for member in archive.getmembers():
-                            if not member.isfile():
-                                continue
-                            output = destination.joinpath(*PurePosixPath(member.name).parts)
-                            output.parent.mkdir(parents=True, exist_ok=True)
-                            source = archive.extractfile(member)
-                            if source is None:
-                                raise RemoteRunError(f"Could not read {member.name} from the archive.")
-                            with source, output.open("xb") as target:
-                                shutil.copyfileobj(source, target)
+                _extract_into(Path(temporary.name), destination)
             return
         except Exception as error:  # try main, then master
             last_error = error
@@ -376,7 +409,7 @@ def clone(
         if target.exists():
             raise RemoteRunError(f"Destination already exists: {target}")
     else:
-        root = Path("~/floability-backpacks").expanduser()
+        root = Path(DEFAULT_LOCAL_ROOT).expanduser()
         root.mkdir(parents=True, exist_ok=True)
         target = _unique_destination(root, name)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -410,6 +443,51 @@ def clone(
         raise
 
 
+def _looks_like_backpack(path: Path) -> bool:
+    try:
+        workflow = path / "workflow"
+        return workflow.is_dir() and not workflow.is_symlink()
+    except OSError:
+        return False
+
+
+def list_directories(path: Union[str, Path] = "") -> DirectoryListing:
+    """List visible subfolders of `path` (home by default) for folder picking.
+
+    Hidden folders, generated folders, and symlinks are left out. Folders that
+    contain a workflow/ directory are marked as backpacks.
+    """
+    current = (Path(path).expanduser() if str(path).strip() else Path.home()).resolve()
+    if not current.is_dir():
+        raise RemoteRunError(f"Folder does not exist: {current}")
+    try:
+        children = sorted(current.iterdir(), key=lambda item: item.name.lower())
+    except OSError as error:
+        raise RemoteRunError(f"Cannot open folder {current}: {error.strerror or error}")
+
+    entries: List[DirectoryEntry] = []
+    truncated = False
+    for child in children:
+        if child.name.startswith(".") or child.name in SKIPPED_NAMES:
+            continue
+        try:
+            if child.is_symlink() or not child.is_dir():
+                continue
+        except OSError:
+            continue
+        if len(entries) >= MAX_LISTED_DIRECTORIES:
+            truncated = True
+            break
+        entries.append(DirectoryEntry(child.name, str(child), _looks_like_backpack(child)))
+    return DirectoryListing(
+        path=str(current),
+        parent=str(current.parent) if current.parent != current else None,
+        is_backpack=_looks_like_backpack(current),
+        directories=tuple(entries),
+        truncated=truncated,
+    )
+
+
 def discard_changes(path: Union[str, Path]) -> BackpackProvenance:
     """Discard modifications to tracked files in one local Git clone."""
     resolved = Path(path).expanduser().resolve()
@@ -422,6 +500,11 @@ def discard_changes(path: Union[str, Path]) -> BackpackProvenance:
     if result.returncode != 0:
         raise RemoteRunError(result.stderr.strip() or "Could not discard changes.")
     return provenance(resolved)
+
+
+def vscode_available() -> bool:
+    """Whether VS Code's `code` command is on this process's PATH."""
+    return shutil.which("code") is not None
 
 
 def open_local(path: Union[str, Path], vscode: bool = False) -> None:
