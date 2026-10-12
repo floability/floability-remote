@@ -538,6 +538,46 @@ a.button { text-decoration: none; }
 .cluster-quota summary { color: var(--text-muted); cursor: pointer; }
 .cluster-quota pre { max-height: 140px; overflow: auto; margin: 8px 0 0; padding: 9px; border-radius: var(--radius-sm); background: var(--surface-muted); white-space: pre-wrap; font-size: 11px; }
 .cluster-issues { margin: 0 0 12px; padding-left: 18px; color: var(--warning); font-size: 12px; line-height: 1.45; }
+/* TaskVine card: live manager, worker, and task activity */
+.taskvine-badge[data-state="live"] { background: var(--success-soft); color: var(--success); }
+.taskvine-badge[data-state="waiting"] { background: var(--accent-soft); color: var(--accent); }
+.taskvine-badge[data-state="finished"] { background: var(--surface-muted); color: var(--text-muted); }
+.taskvine-badge[data-state="unavailable"] { background: var(--warning-soft); color: var(--warning); }
+.taskvine-message { margin: 10px 0 0; color: var(--text-muted); font-size: 12px; }
+.taskvine-message:empty { display: none; }
+.taskvine-facts { margin: 10px 0 6px; }
+.taskvine-bar {
+  display: flex;
+  height: 8px;
+  margin: 2px 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+.taskvine-bar span { display: block; height: 100%; transition: width 300ms ease; }
+.taskvine-bar [data-part="done"] { background: var(--success); }
+.taskvine-bar [data-part="failed"] { background: var(--danger); }
+.taskvine-bar [data-part="running"] { background: var(--steel-blue); }
+.taskvine-bar [data-part="waiting"] { background: var(--border-strong); }
+.taskvine-recent-title {
+  margin: 4px 0 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.taskvine-events { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.taskvine-events li { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px; font-size: 12px; border-radius: 4px; }
+.taskvine-events time { color: var(--text-faint); font-family: var(--font-mono); font-size: 11.5px; }
+.taskvine-events span { overflow-wrap: anywhere; }
+.taskvine-updated { margin: 10px 0 0; color: var(--text-faint); font-size: 11.5px; }
+.taskvine-updated:empty { display: none; }
+/* Brief highlight when a value changes, so small updates are noticeable. */
+.changed { animation: taskvine-flash 1.2s ease-out; }
+@keyframes taskvine-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .changed { animation: none; } .taskvine-bar span { transition: none; } }
+
 .cluster-check-message { min-height: 18px; margin: 0 0 10px; color: var(--text-muted); font-size: 12px; }
 
 /* Connection ------------------------------------------------------------- */

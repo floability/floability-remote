@@ -549,7 +549,9 @@ printf '__FLOABILITY_REMOTE_AVAILABLE_BATCH_TYPES__=%s\n' "$available_batch_type
 """
 
 
-LIST_DOWNLOAD_FILES = r"""
+# Shared start of scripts that inspect a run directory with the remote Python:
+# expands "~" in $1, finds a Python interpreter, and sets $run_dir and $python_path.
+_RUN_DIR_PYTHON = r"""
 set -euo pipefail
 
 run_dir=$1
@@ -592,6 +594,10 @@ python_path=$(find_python) || {
     exit 3
 }
 
+"""
+
+
+LIST_DOWNLOAD_FILES = _RUN_DIR_PYTHON + r"""
 "$python_path" - "$run_dir" <<'PY'
 import json
 import os
@@ -764,6 +770,169 @@ PY
 """
 
 
+TASKVINE_STATUS = _RUN_DIR_PYTHON + r"""
+"$python_path" - "$run_dir" <<'PY'
+# Summarize TaskVine activity for one run from two files Floability's run
+# already writes:
+#   <instance>/.../vine-run-info/<time>/vine-logs/transactions
+#       one line per manager, worker, and task event, written as it happens
+#   <instance>/logs/vine_factory.stdout
+#       the worker factory's latest "|submitted: … |waiting connection: …" line
+import collections
+import json
+import re
+import sys
+from pathlib import Path
+
+run_dir = Path(sys.argv[1]).expanduser()
+marker_file = run_dir / ".floability-remote-run"
+if not run_dir.is_dir() or not marker_file.is_file() or marker_file.is_symlink():
+    raise SystemExit("The path is not a Floability Remote run directory.")
+
+INSTANCE_MARKER = "[floability] Created instance structure at:"
+FACTORY_LINE = re.compile(
+    r"(\d{4}/\d\d/\d\d \d\d:\d\d:\d\d): \|submitted: (\d+) \|needed: (\d+) "
+    r"\|waiting connection: (\d+) \|requested: (\d+)"
+)
+WAITING = {"INITIAL", "READY"}
+RUNNING = {"RUNNING", "WAITING_RETRIEVAL", "RETRIEVED"}
+
+
+def find_instance():
+    for name in ("execute-command.log", "run-command.log"):
+        log = run_dir / name
+        if not log.is_file() or log.is_symlink():
+            continue
+        with log.open("r", encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                if INSTANCE_MARKER in line:
+                    path = Path(line.split(INSTANCE_MARKER, 1)[1].strip()).expanduser()
+                    if path.is_absolute() and path.is_dir() and not path.is_symlink():
+                        return path
+                    return None
+    return None
+
+
+def newest_transactions_log(instance):
+    # The manager's newest log; it lives under the manager's working directory.
+    candidates = []
+    for base in (instance / "workflow", instance):
+        runtime = base / "vine-run-info"
+        if not runtime.is_dir() or runtime.is_symlink():
+            continue
+        for entry in runtime.iterdir():
+            log = entry / "vine-logs" / "transactions"
+            if entry.is_symlink() or not log.is_file() or log.is_symlink():
+                continue
+            candidates.append((log.stat().st_mtime, str(log)))
+    return Path(max(candidates)[1]) if candidates else None
+
+
+def factory_status(instance):
+    log = instance / "logs" / "vine_factory.stdout"
+    if not log.is_file() or log.is_symlink():
+        return None
+    with log.open("rb") as stream:
+        stream.seek(0, 2)
+        stream.seek(max(0, stream.tell() - 65536))
+        tail = stream.read().decode("utf-8", errors="replace")
+    matches = FACTORY_LINE.findall(tail)
+    if not matches:
+        return None
+    at, submitted, needed, waiting, requested = matches[-1]
+    return {
+        "at": at,
+        "submitted": int(submitted),
+        "needed": int(needed),
+        "waiting_connection": int(waiting),
+        "requested": int(requested),
+    }
+
+
+def summarize(log):
+    manager = {"state": "not_started", "started_at": None, "ended_at": None}
+    worker_connected = {}
+    worker_host = {}
+    task_state = {}
+    recent = collections.deque(maxlen=8)
+
+    def note(when, text):
+        recent.append({"time": when, "text": text})
+
+    with log.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            if line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                when = int(parts[0]) / 1_000_000
+            except ValueError:
+                continue
+            kind, subject, action = parts[2], parts[3], parts[4]
+            if kind == "MANAGER":
+                if action == "START":
+                    manager.update(state="running", started_at=when, ended_at=None)
+                    note(when, "Manager started")
+                elif action == "END":
+                    manager.update(state="ended", ended_at=when)
+                    note(when, "Manager stopped")
+            elif kind == "WORKER":
+                if action == "CONNECTION":
+                    worker_connected[subject] = True
+                    worker_host[subject] = parts[5] if len(parts) > 5 else subject
+                    note(when, f"Worker connected from {worker_host[subject]}")
+                elif action == "DISCONNECTION":
+                    worker_connected[subject] = False
+                    reason = parts[5].replace("_", " ").lower() if len(parts) > 5 else "unknown"
+                    note(when, f"Worker {worker_host.get(subject, subject)} disconnected ({reason})")
+            elif kind == "TASK":
+                result = parts[5] if action in ("DONE", "RETRIEVED") and len(parts) > 5 else ""
+                task_state[subject] = (action, result)
+                if action == "RUNNING":
+                    worker = parts[5] if len(parts) > 5 else ""
+                    note(when, f"Task {subject} started on {worker_host.get(worker, 'a worker')}")
+                elif action == "DONE":
+                    if result == "SUCCESS":
+                        note(when, f"Task {subject} finished")
+                    else:
+                        note(when, f"Task {subject} failed ({result.replace('_', ' ').lower()})")
+
+    counts = {"waiting": 0, "running": 0, "done": 0, "failed": 0}
+    for action, result in task_state.values():
+        if action in WAITING:
+            counts["waiting"] += 1
+        elif action in RUNNING:
+            counts["running"] += 1
+        elif action == "DONE":
+            counts["done" if result == "SUCCESS" else "failed"] += 1
+    return {
+        "manager": manager,
+        "workers": {
+            # Workers leave with the manager, which does not log each departure.
+            "connected": 0 if manager["state"] == "ended" else sum(worker_connected.values()),
+            "seen": len(worker_connected),
+        },
+        "tasks": counts,
+        "recent": list(recent),
+        "updated_at": log.stat().st_mtime,
+    }
+
+
+instance = find_instance()
+payload = {"instance_found": instance is not None, "log_found": False, "factory": None}
+if instance is not None:
+    payload["factory"] = factory_status(instance)
+    log = newest_transactions_log(instance)
+    if log is not None:
+        payload["log_found"] = True
+        payload.update(summarize(log))
+print("__FLOABILITY_REMOTE_TASKVINE__=" + json.dumps(payload, ensure_ascii=True))
+PY
+"""
+
+
 IDENTIFY = r"""
 set -u
 
@@ -773,6 +942,7 @@ printf '__FLOABILITY_REMOTE_HOST__=%s\n' "$(hostname 2>/dev/null || uname -n)"
 
 
 ALL = (
+    TASKVINE_STATUS,
     IDENTIFY,
     PROBE,
     INSTALL_MINIFORGE,

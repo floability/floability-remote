@@ -9,6 +9,7 @@ import {
   syncModeFields,
 } from "./form.js";
 import { RunPanel } from "./run.js";
+import { TaskVineCard } from "./taskvine.js";
 import { BackpackPicker } from "./backpack.js";
 
 const HEALTH_INTERVAL_MS = 15000;
@@ -402,6 +403,7 @@ const runPanel = new RunPanel({
   onNewRun: () => {
     if (stopFollowing) stopFollowing();
     runPanel.hide();
+    taskvineCard.hide();
     updateStartControl();
     const source = new FormData(form).get("backpack.source_type");
     form.querySelector(source === "git" ? "#repository" : "#local-folder-path")?.focus();
@@ -427,9 +429,12 @@ function restoreRunFields(run) {
   syncModeFields(form);
 }
 
+const taskvineCard = new TaskVineCard({ load: (runId) => api.taskvineStatus(runId) });
+
 function follow(run, { restored = false } = {}) {
   if (stopFollowing) stopFollowing();
   runPanel.reset(run);
+  taskvineCard.watch(run.id, run.state === "running");
   if (restored) restoreRunFields(run);
   else runPanel.panel.scrollIntoView({ behavior: "smooth", block: "start" });
   stopFollowing = api.followRun(run.id, {
@@ -442,6 +447,7 @@ function follow(run, { restored = false } = {}) {
       updateStartControl();
       refreshConnection();
       loadRunFiles(run.id);
+      taskvineCard.finish();
     },
   });
   updateStartControl();

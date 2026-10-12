@@ -97,6 +97,7 @@ export const api = {
   currentRun: () => request("GET", "/runs/current"),
   run: (runId) => request("GET", `/runs/${segment(runId)}`),
   runFiles: (runId) => request("GET", `/runs/${segment(runId)}/files`),
+  taskvineStatus: (runId) => request("GET", `/runs/${segment(runId)}/taskvine`),
   downloadUrl: (runId, fileId) =>
     `${API_PREFIX}/runs/${segment(runId)}/files/${segment(fileId)}/download`,
   cancelRun: (runId) => request("POST", `/runs/${segment(runId)}/cancel`),

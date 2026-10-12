@@ -262,6 +262,7 @@ and closes the connection.
 | `GET /api/v1/runs/{id}/events` | Server-Sent Events (below). |
 | `GET /api/v1/runs/{id}/files` | Approved regular files retained by a finished run. Requires the matching SSH connection. |
 | `GET /api/v1/runs/{id}/files/{file_id}/download` | Revalidate and download one listed file. |
+| `GET /api/v1/runs/{id}/taskvine` | Live TaskVine summary for the run: `manager_state` (`not_started`, `running`, `ended`), worker and task counts, the factory's latest submission counts, and the eight most recent events. `available` is false until the run has a remote directory. `uses_taskvine` is true only once the workflow has started a TaskVine manager (`MANAGER … START` in the transactions log); clients should show TaskVine activity only then, because many backpacks never start one. Requires the matching SSH connection. |
 | `POST /api/v1/runs/{id}/cancel` | `202`; cancels an execution or stops an interactive session. Cleanup progress arrives as events. |
 | `POST /api/v1/runs/{id}/confirmations/{id}` | `{"approved": true}` → `204`. |
 

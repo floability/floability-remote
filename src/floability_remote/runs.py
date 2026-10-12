@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Callable, Dict, List, Optional
 
 from .config import RunConfig
@@ -59,6 +60,8 @@ class Run:
         self.message: Optional[str] = None
         self.result: Dict[str, str] = {}
         self.jupyter_url: Optional[str] = None
+        # Known from "Backpack ready" onward, so live views can read the run.
+        self.remote_run_dir: Optional[str] = None
         self.cancel_token = CancelToken()
         self.cancel_requested = False
         self._events: List[Event] = []
@@ -74,6 +77,10 @@ class Run:
             self._events.append(event)
             if event.kind == EventKind.READY:
                 self.jupyter_url = event.data.get("url")
+            backpack_dir = event.data.get("backpack_dir")
+            if self.remote_run_dir is None and isinstance(backpack_dir, str):
+                # Workspaces always place the backpack at <run_dir>/backpack.
+                self.remote_run_dir = str(PurePosixPath(backpack_dir).parent)
             if event.kind in EventKind.TERMINAL:
                 # The tunnel is closed once a run ends; its link no longer works.
                 self.jupyter_url = None
@@ -83,6 +90,7 @@ class Run:
                 self.result = {
                     key: str(value) for key, value in event.data.items() if value is not None
                 }
+                self.remote_run_dir = self.result.get("run_dir") or self.remote_run_dir
             self._changed.notify_all()
 
     # Reading ---------------------------------------------------------------

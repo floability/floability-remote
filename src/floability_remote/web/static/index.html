@@ -419,6 +419,38 @@
           </div>
         </div>
 
+        <div class="card taskvine-card" id="taskvine-card" hidden>
+          <div class="cluster-head">
+            <h2 class="card-title">TaskVine</h2>
+            <span class="badge taskvine-badge" id="taskvine-state" data-state="waiting">Waiting</span>
+          </div>
+          <p class="taskvine-message" id="taskvine-message"></p>
+          <dl class="cluster-facts taskvine-facts">
+            <div>
+              <dt>Manager</dt>
+              <dd id="taskvine-manager">Not started yet</dd>
+            </div>
+            <div>
+              <dt>Workers</dt>
+              <dd id="taskvine-workers">None connected</dd>
+            </div>
+            <div>
+              <dt>Tasks</dt>
+              <dd>
+                <div class="taskvine-bar" id="taskvine-bar" aria-hidden="true">
+                  <span data-part="done"></span><span data-part="failed"></span><span data-part="running"></span><span data-part="waiting"></span>
+                </div>
+                <span id="taskvine-tasks">None yet</span>
+              </dd>
+            </div>
+          </dl>
+          <div class="taskvine-recent" id="taskvine-recent" hidden>
+            <p class="taskvine-recent-title">Recent activity</p>
+            <ol class="taskvine-events" id="taskvine-events"></ol>
+          </div>
+          <p class="taskvine-updated" id="taskvine-updated" aria-live="polite"></p>
+        </div>
+
         <div class="card guidance-card" id="getting-started-card">
           <h2 class="card-title">Getting started</h2>
           <ol class="getting-started">

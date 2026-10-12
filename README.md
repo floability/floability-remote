@@ -353,6 +353,36 @@ directories, and special files are never offered. A listing is limited to
 2,000 files, and an individual download to 100 MiB. Larger and multi-file
 transfers are deferred to a later version.
 
+## TaskVine activity
+
+When a run's workflow uses TaskVine, the web interface's **TaskVine** card
+shows the manager, workers, and tasks, refreshing every 5 seconds. Many
+backpacks never start a TaskVine manager (Floability starts its worker factory
+for every run regardless), so the card appears only once the transactions log
+shows `MANAGER … START`. The same summary is available from the CLI, which
+says so when the run has no TaskVine manager:
+
+```bash
+floability-remote taskvine --target my-cluster --run-dir <REMOTE_RUN_DIRECTORY>
+```
+
+It is read from two files the run already writes on the cluster, over the
+existing SSH connection:
+
+- TaskVine's transactions log, `vine-run-info/<time>/vine-logs/transactions`
+  under the manager's working directory in the Floability instance, where the
+  manager appends a line for every manager, worker, and task event as it
+  happens; and
+- the worker factory's latest status line in the instance's
+  `logs/vine_factory.stdout`, which counts workers submitted to the batch
+  system that have not connected yet.
+
+The rules are deliberately simple: a worker is connected when its latest line
+is `CONNECTION` and the manager is still running; a task's state is its
+latest `TASK` line (`DONE SUCCESS` is done, any other `DONE` result is
+failed); and the manager is running between `START` and `END`. Nothing
+depends on the public catalog server.
+
 ## Remote requirements
 
 - Linux;

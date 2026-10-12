@@ -93,6 +93,17 @@ class FrontendBoundaryTests(unittest.TestCase):
         source = (STATIC / "js" / "form.js").read_text()
         self.assertIn("control.disabled = !visible", source)
 
+    def test_taskvine_card_is_in_the_sidebar(self):
+        html = (STATIC / "index.html").read_text()
+        aside = html[html.index('<aside class="summary">'):html.index("</aside>")]
+        self.assertIn('id="taskvine-card" hidden', aside)
+        source = (STATIC / "js" / "main.js").read_text()
+        self.assertIn("taskvineCard.watch(run.id", source)
+        self.assertIn("taskvineCard.finish()", source)
+        # Shown only once a TaskVine manager exists; many backpacks never start one.
+        card = (STATIC / "js" / "taskvine.js").read_text()
+        self.assertIn("if (!status.uses_taskvine) return;", card)
+
     def test_completed_run_panel_has_download_area(self):
         html = (STATIC / "index.html").read_text()
         self.assertIn('id="run-files"', html)

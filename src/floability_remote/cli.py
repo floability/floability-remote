@@ -3,6 +3,7 @@
 import argparse
 import shlex
 import sys
+import time
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -35,6 +36,7 @@ from .files import (
 from .interaction import INSTALL_MINIFORGE, Confirm, ConfirmationRequest
 from .local_backpack import clone as clone_backpack
 from .ssh import SSHSession
+from .taskvine import TaskVineService, TaskVineStatus
 from .workflow import RemoteWorkflow
 
 
@@ -123,6 +125,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--identity-file", help="Optional local SSH private-key path."
     )
     download_parser.add_argument(
+        "--ssh-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Additional OpenSSH -o option; repeat when needed.",
+    )
+
+    taskvine_parser = commands.add_parser(
+        "taskvine", help="Show TaskVine manager, worker, and task activity for a remote run."
+    )
+    taskvine_parser.add_argument(
+        "--target",
+        required=True,
+        help="OpenSSH alias, hostname, or user@host for the remote login node.",
+    )
+    taskvine_parser.add_argument(
+        "--run-dir",
+        required=True,
+        help="Remote run directory reported by run or execute.",
+    )
+    taskvine_parser.add_argument(
+        "--identity-file", help="Optional local SSH private-key path."
+    )
+    taskvine_parser.add_argument(
         "--ssh-option",
         action="append",
         default=[],
@@ -459,13 +485,17 @@ def _download_destination(raw: str, filename: str) -> Path:
     return destination
 
 
-def run_download(args: argparse.Namespace) -> int:
+def _check_run_dir(run_dir: str) -> None:
     if (
-        not args.run_dir.strip()
-        or args.run_dir.startswith("-")
-        or any(ord(character) < 32 for character in args.run_dir)
+        not run_dir.strip()
+        or run_dir.startswith("-")
+        or any(ord(character) < 32 for character in run_dir)
     ):
         raise RemoteRunError("--run-dir must be a non-empty remote path.")
+
+
+def run_download(args: argparse.Namespace) -> int:
+    _check_run_dir(args.run_dir)
     connection = validate_connection(
         ConnectionConfig(
             target=args.target,
@@ -494,6 +524,67 @@ def run_download(args: argparse.Namespace) -> int:
         destination = _download_destination(args.output, item.filename)
         service.download(args.run_dir, item.id, destination)
         print(f"\nDownloaded {item.path} to {destination}")
+        return 0
+    finally:
+        session.close()
+
+
+def _clock(timestamp: Optional[float]) -> str:
+    return time.strftime("%H:%M:%S", time.localtime(timestamp)) if timestamp else "-"
+
+
+def print_taskvine_status(status: TaskVineStatus) -> None:
+    """Print the same summary the web interface's TaskVine card shows."""
+    if not status.instance_found:
+        print("Floability has not created its instance yet.")
+        return
+    if not status.uses_taskvine:
+        print("No TaskVine manager has started in this run; the workflow may not use TaskVine.")
+        return
+    if status.manager_state == "running":
+        manager = f"running since {_clock(status.manager_started_at)}"
+    elif status.manager_state == "ended":
+        manager = f"stopped at {_clock(status.manager_ended_at)}"
+    else:
+        manager = "not started yet"
+    print(f"Manager   {manager}")
+    workers = f"{status.workers_connected} connected"
+    if status.manager_state == "ended":
+        workers = f"{status.workers_seen} took part in the run"
+    elif status.factory:
+        workers += (
+            f" · {status.factory.submitted} submitted to the batch system,"
+            f" {status.factory.waiting_connection} waiting to connect"
+        )
+    print(f"Workers   {workers}")
+    print(
+        f"Tasks     {status.tasks_waiting} waiting · {status.tasks_running} running"
+        f" · {status.tasks_done} done · {status.tasks_failed} failed"
+    )
+    if status.recent:
+        print("Recent")
+        for event in status.recent:
+            print(f"  {_clock(event.time)}  {event.text}")
+
+
+def run_taskvine(args: argparse.Namespace) -> int:
+    _check_run_dir(args.run_dir)
+    connection = validate_connection(
+        ConnectionConfig(
+            target=args.target,
+            identity_file=args.identity_file,
+            ssh_options=tuple(args.ssh_option),
+        )
+    )
+    session = SSHSession(
+        connection.target,
+        identity_file=connection.identity_file,
+        ssh_options=connection.ssh_options,
+    )
+    try:
+        print(f"[remote] Connecting to {connection.target}...")
+        session.start()
+        print_taskvine_status(TaskVineService(session).status(args.run_dir))
         return 0
     finally:
         session.close()
@@ -570,6 +661,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return run_download(args)
         if args.command == "check-cluster":
             return run_cluster_check(args)
+        if args.command == "taskvine":
+            return run_taskvine(args)
         if args.command == "clone":
             return run_clone(args)
         config = validate_args(args)

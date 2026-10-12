@@ -11,6 +11,7 @@ from floability_remote.events import EventKind
 from floability_remote.interaction import INSTALL_MINIFORGE, ConfirmationRequest
 from floability_remote.cluster import ClusterReport
 from floability_remote.models import RemoteProbe
+from taskvine_sample import make_run
 from test_runs import ScriptedWorkflow
 
 from .support import make_client, requires_web, run_request
@@ -311,6 +312,43 @@ class ConnectionAndRunApiTests(unittest.TestCase):
             f"/api/v1/runs/{run['id']}", lambda body: body["state"] != "running"
         )
         self.assertEqual(finished["state"], "cancelled")
+
+    def test_taskvine_status_follows_the_run(self):
+        self.connect()
+        backpack_ready = threading.Event()
+        release = threading.Event()
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = make_run(Path(directory))
+
+            def script(workflow):
+                backpack_ready.wait(10)
+                workflow.emit(EventKind.DETAIL, "Backpack ready", backpack_dir=str(run_dir / "backpack"))
+                release.wait(10)
+                workflow.emit(EventKind.COMPLETED, "done")
+
+            run = self.start(script)
+            path = f"/api/v1/runs/{run['id']}/taskvine"
+            early = self.client.get(path).json()
+            self.assertFalse(early["available"])
+            self.assertFalse(early["uses_taskvine"])
+
+            backpack_ready.set()
+            status = self.poll(path, lambda body: body["available"])
+            release.set()
+
+        self.assertTrue(status["log_found"])
+        self.assertTrue(status["uses_taskvine"])
+        self.assertEqual(status["manager_state"], "running")
+        self.assertEqual(status["workers_connected"], 1)
+        self.assertEqual(
+            [status[key] for key in ("tasks_waiting", "tasks_running", "tasks_done", "tasks_failed")],
+            [1, 1, 1, 1],
+        )
+        self.assertEqual(status["factory"]["submitted"], 3)
+        self.assertEqual(status["recent"][-1]["text"], "Worker 10.1.2.3:40001 disconnected (idle out)")
+
+    def test_taskvine_status_needs_the_connection(self):
+        self.assertEqual(self.client.get("/api/v1/runs/nope/taskvine").status_code, 404)
 
     def test_unknown_run(self):
         self.assertEqual(self.client.get("/api/v1/runs/nope").status_code, 404)
