@@ -17,11 +17,11 @@ in the terminal. The browser-specific AskPass relay described here is used by
 | Browser connection form and prompt controls | [`web/static/js/connection.js`](../src/floability_remote/web/static/js/connection.js) |
 | Browser polling and connection orchestration | [`web/static/js/main.js`](../src/floability_remote/web/static/js/main.js) |
 | Browser HTTP client | [`web/static/js/api.js`](../src/floability_remote/web/static/js/api.js) |
-| FastAPI connection routes | [`web/routes/connection.py`](../src/floability_remote/web/routes/connection.py) |
-| Long-lived connection state | [`connection.py`](../src/floability_remote/connection.py) |
-| AskPass broker, helper, and prompt classification | [`askpass.py`](../src/floability_remote/askpass.py) |
-| OpenSSH control master and multiplexed commands | [`ssh.py`](../src/floability_remote/ssh.py) |
-| API request and response models | [`web/schemas.py`](../src/floability_remote/web/schemas.py) |
+| FastAPI connection routes | [`daemon/routes/connection.py`](../src/floability_remote/daemon/routes/connection.py) |
+| Long-lived connection state | [`remote/connection.py`](../src/floability_remote/remote/connection.py) |
+| AskPass broker, helper, and prompt classification | [`remote/askpass.py`](../src/floability_remote/remote/askpass.py) |
+| OpenSSH control master and multiplexed commands | [`remote/ssh.py`](../src/floability_remote/remote/ssh.py) |
+| API request and response contracts | [`application/contracts/`](../src/floability_remote/application/contracts/) |
 
 ## Control flow at a glance
 

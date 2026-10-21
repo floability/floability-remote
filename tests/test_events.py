@@ -1,7 +1,7 @@
 import threading
 import unittest
 
-from floability_remote.events import (
+from floability_remote.domain.events import (
     Emitter,
     Event,
     EventKind,
@@ -10,7 +10,7 @@ from floability_remote.events import (
     RedactingSink,
     Redactor,
 )
-from floability_remote.interaction import CancelToken
+from floability_remote.domain.interaction import CancelToken
 
 
 class EventTests(unittest.TestCase):

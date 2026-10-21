@@ -6,7 +6,7 @@ from pathlib import Path
 
 from floability_remote import __version__
 from floability_remote.cli import build_parser, cli_arguments, validate_args
-from floability_remote.config import SUPPORTED_BATCH_TYPES, SUPPORTED_MODES
+from floability_remote.domain.config import SUPPORTED_BATCH_TYPES, SUPPORTED_MODES
 
 from .support import make_client, requires_web, run_request
 
@@ -35,7 +35,7 @@ class SystemEndpointTests(unittest.TestCase):
     def test_meta_reports_whether_vscode_is_available(self):
         for found, expected in (("/usr/local/bin/code", True), (None, False)):
             with self.subTest(found=found), mock.patch(
-                "floability_remote.local_backpack.shutil.which", return_value=found
+                "floability_remote.services.backpacks.shutil.which", return_value=found
             ):
                 meta = self.client.get("/api/v1/meta").json()
             self.assertEqual(meta["local_tools"], {"vscode": expected})

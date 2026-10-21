@@ -5,10 +5,10 @@ import unittest
 from unittest import mock
 
 from floability_remote.cli import build_parser, validate_args
-from floability_remote.connection import ConnectionConflict
-from floability_remote.events import Event, EventKind
-from floability_remote.interaction import INSTALL_MINIFORGE, ConfirmationRequest
-from floability_remote.runs import RunConflict, RunManager, RunState
+from floability_remote.remote.connection import ConnectionConflict
+from floability_remote.domain.events import Event, EventKind
+from floability_remote.domain.interaction import INSTALL_MINIFORGE, ConfirmationRequest
+from floability_remote.deployment.runs import RunConflict, RunManager, RunState
 
 from test_workflow import PROBE, FakeSession, StoppableSession
 
@@ -176,7 +176,7 @@ class RunManagerWithRealWorkflowTests(unittest.TestCase):
         manager = RunManager(FakeConnections(session))
         with contextlib.ExitStack() as stack:
             stack.enter_context(
-                mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+                mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE)
             )
             run = manager.start(config())
             return manager, run, stack.pop_all()

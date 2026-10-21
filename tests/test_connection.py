@@ -2,9 +2,9 @@ import getpass
 import time
 import unittest
 
-from floability_remote.askpass import PromptKind
-from floability_remote.config import ConnectionConfig
-from floability_remote.connection import (
+from floability_remote.remote.askpass import PromptKind
+from floability_remote.domain.config import ConnectionConfig
+from floability_remote.remote.connection import (
     ConnectionConflict,
     ConnectionManager,
     ConnectionState,
@@ -69,7 +69,7 @@ class ConnectionManagerTests(unittest.TestCase):
         import threading
         import urllib.request
 
-        from floability_remote.ssh import choose_local_port, terminate_process
+        from floability_remote.remote.ssh import choose_local_port, terminate_process
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):

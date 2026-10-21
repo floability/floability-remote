@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from floability_remote import remote_scripts
+from floability_remote.remote import scripts as remote_scripts
 
 
 UTIL_LINUX_SETSID = f"""#!{sys.executable}

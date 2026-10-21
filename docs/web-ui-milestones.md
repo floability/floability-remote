@@ -70,13 +70,13 @@ output parsing.
 The CLI was refactored without changing its output (verified byte for byte
 against the previous implementation):
 
-- typed `RunConfig` and shared validation in `config.py`;
-- structured events and an `EventSink` in `events.py`, rendered for the
+- typed `RunConfig` and shared validation in `domain/config.py`;
+- structured events and an `EventSink` in `domain/events.py`, rendered for the
   terminal by `cli_reporter.py`;
 - a `Confirm` callback for Miniforge installation instead of `input()`;
 - a thread-safe `CancelToken` and `RemoteWorkflow.cancel()` that run the same
   SIGINT/SIGTERM cleanup as Ctrl+C;
-- `workspace.py` for the remote run directory and backpack clone/upload; and
+- `deployment/workspace.py` for the remote run directory and backpack clone/upload; and
 - Jupyter-token redaction for logs while the `ready` event keeps the
   clickable link.
 
@@ -303,7 +303,7 @@ workflow logic.
 
 ## M2 and M3 implementation notes
 
-- OpenSSH remains the only transport. `askpass.py` relays password, MFA, and
+- OpenSSH remains the only transport. `remote/askpass.py` relays password, MFA, and
   host-key prompts to the browser with `SSH_ASKPASS_REQUIRE=force`; no
   in-process SSH library was added.
 - `connection.ConnectionManager` keeps one control master alive with

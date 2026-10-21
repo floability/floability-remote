@@ -7,10 +7,10 @@ from pathlib import Path
 from unittest import mock
 
 from fake_ssh import PASSWORD, fake_ssh
-from floability_remote.events import EventKind
-from floability_remote.interaction import INSTALL_MINIFORGE, ConfirmationRequest
-from floability_remote.cluster import ClusterReport
-from floability_remote.models import RemoteProbe
+from floability_remote.domain.events import EventKind
+from floability_remote.domain.interaction import INSTALL_MINIFORGE, ConfirmationRequest
+from floability_remote.services.cluster import ClusterReport
+from floability_remote.domain.models import RemoteProbe
 from taskvine_sample import make_run
 from test_runs import ScriptedWorkflow
 
@@ -39,8 +39,8 @@ def parse_sse(text):
 @requires_web
 class ConnectionAndRunApiTests(unittest.TestCase):
     def setUp(self):
-        from floability_remote.connection import ConnectionManager
-        from floability_remote.runs import RunManager
+        from floability_remote.remote.connection import ConnectionManager
+        from floability_remote.deployment.runs import RunManager
         from floability_remote.web.services import Services
 
         connections = ConnectionManager()
@@ -126,7 +126,7 @@ class ConnectionAndRunApiTests(unittest.TestCase):
             issues=(),
         )
         with mock.patch(
-            "floability_remote.web.routes.cluster.ClusterService.check",
+            "floability_remote.application.operations.clusters.ClusterService.check",
             return_value=report,
         ) as check:
             response = self.client.post(

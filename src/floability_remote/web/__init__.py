@@ -1,7 +1,5 @@
-"""Local web interface and versioned JSON API for floability-remote.
+"""Browser assets and compatibility imports for the local interface."""
 
-Importing this package does not import FastAPI; `floability-remote web` loads
-`floability_remote.web.server` only when the web command runs.
-"""
+from ..daemon import API_PREFIX
 
-API_PREFIX = "/api/v1"
+__all__ = ["API_PREFIX"]

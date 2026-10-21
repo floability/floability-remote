@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from unittest import mock
 import subprocess
 
-from floability_remote import remote_scripts
-from floability_remote.errors import RemoteRunError
-from floability_remote.local_backpack import (
+from floability_remote.remote import scripts as remote_scripts
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.services.backpacks import (
     clone,
     discard_changes,
     inspect,
@@ -143,9 +143,9 @@ class LocalBackpackTests(unittest.TestCase):
         )
 
     def test_file_and_size_limits_are_reported(self):
-        with mock.patch("floability_remote.local_backpack.MAX_FILES", 0):
+        with mock.patch("floability_remote.services.backpacks.MAX_FILES", 0):
             self.assertIn("more than", " ".join(inspect(self.root).problems))
-        with mock.patch("floability_remote.local_backpack.MAX_BYTES", 1):
+        with mock.patch("floability_remote.services.backpacks.MAX_BYTES", 1):
             self.assertIn("larger than", " ".join(inspect(self.root).problems))
 
 
@@ -203,9 +203,9 @@ class LocalCloneTests(unittest.TestCase):
                 self.close()
 
         destination = self.root / "downloaded"
-        with mock.patch("floability_remote.local_backpack.shutil.which", return_value=None):
+        with mock.patch("floability_remote.services.backpacks.shutil.which", return_value=None):
             with mock.patch(
-                "floability_remote.local_backpack.urllib.request.urlopen",
+                "floability_remote.services.backpacks.urllib.request.urlopen",
                 return_value=Response(archive_bytes.getvalue()),
             ):
                 result = clone(

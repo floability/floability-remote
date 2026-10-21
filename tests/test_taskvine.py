@@ -6,12 +6,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from floability_remote import remote_scripts
+from floability_remote.remote import scripts as remote_scripts
 from floability_remote.cli import build_parser, print_taskvine_status
-from floability_remote.errors import RemoteRunError
-from floability_remote.events import Event, EventKind
-from floability_remote.runs import Run
-from floability_remote.taskvine import TaskVineService, parse_status
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.domain.events import Event, EventKind
+from floability_remote.deployment.runs import Run
+from floability_remote.services.taskvine import TaskVineService, parse_status
 
 from taskvine_sample import make_run
 from test_runs import config

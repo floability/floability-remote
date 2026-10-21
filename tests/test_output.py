@@ -1,8 +1,8 @@
 import unittest
 
-from floability_remote.errors import RemoteRunError
-from floability_remote.models import JupyterConnection
-from floability_remote.output import (
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.domain.models import JupyterConnection
+from floability_remote.remote.output import (
     concise_floability_progress,
     local_jupyter_url,
     marker_values,

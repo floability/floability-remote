@@ -5,7 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from floability_remote.config import (
+from floability_remote.domain.config import (
     BackpackSource,
     ConfigError,
     ConnectionConfig,

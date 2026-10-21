@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from floability_remote.cli import build_parser, validate_args
-from floability_remote.errors import RemoteRunError
+from floability_remote.domain.errors import RemoteRunError
 
 
 class ParserTests(unittest.TestCase):

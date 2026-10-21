@@ -1,13 +1,13 @@
 import unittest
 from unittest import mock
 
-from floability_remote.config import EnvironmentConfig
-from floability_remote.environment import MANAGED_CONDA, ensure_environment
-from floability_remote.errors import RemoteRunError
-from floability_remote.events import Emitter, ListSink
-from floability_remote.interaction import INSTALL_MINIFORGE
-from floability_remote.models import RemoteProbe
-from floability_remote import remote_scripts
+from floability_remote.domain.config import EnvironmentConfig
+from floability_remote.deployment.environment import MANAGED_CONDA, ensure_environment
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.domain.events import Emitter, ListSink
+from floability_remote.domain.interaction import INSTALL_MINIFORGE
+from floability_remote.domain.models import RemoteProbe
+from floability_remote.remote import scripts as remote_scripts
 
 
 def probe(conda, prefix, version):
@@ -35,7 +35,7 @@ class EnvironmentTests(unittest.TestCase):
         emitter = Emitter(ListSink())
 
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             side_effect=(before, after),
         ) as probe_remote:
             result = ensure_environment(session, EnvironmentConfig(), emitter)
@@ -62,7 +62,7 @@ class EnvironmentTests(unittest.TestCase):
         session = mock.Mock()
 
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             side_effect=(before, after),
         ):
             result = ensure_environment(
@@ -98,7 +98,7 @@ class EnvironmentTests(unittest.TestCase):
         emitter = Emitter(ListSink())
 
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             side_effect=(before, after),
         ) as probe_remote:
             result = ensure_environment(
@@ -134,7 +134,7 @@ class EnvironmentTests(unittest.TestCase):
         emitter = Emitter(ListSink())
 
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             side_effect=(before, managed_without_environment, managed_ready),
         ) as probe_remote:
             result = ensure_environment(
@@ -175,7 +175,7 @@ class EnvironmentTests(unittest.TestCase):
             return True
 
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             side_effect=(missing, installed),
         ):
             result = ensure_environment(
@@ -192,7 +192,7 @@ class EnvironmentTests(unittest.TestCase):
     def test_declined_confirmation_installs_nothing(self):
         session = mock.Mock()
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             return_value=probe(None, None, None),
         ):
             with self.assertRaisesRegex(RemoteRunError, "declined"):
@@ -204,7 +204,7 @@ class EnvironmentTests(unittest.TestCase):
     def test_default_confirmation_declines(self):
         session = mock.Mock()
         with mock.patch(
-            "floability_remote.environment.probe_remote",
+            "floability_remote.deployment.environment.probe_remote",
             return_value=probe(None, None, None),
         ):
             with self.assertRaisesRegex(RemoteRunError, "declined"):
@@ -219,7 +219,7 @@ class EnvironmentTests(unittest.TestCase):
             "0.3.1",
         )
         with mock.patch(
-            "floability_remote.environment.probe_remote", return_value=ready
+            "floability_remote.deployment.environment.probe_remote", return_value=ready
         ):
             ensure_environment(mock.Mock(), EnvironmentConfig(), Emitter(sink))
         self.assertEqual(

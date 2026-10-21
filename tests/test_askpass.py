@@ -4,7 +4,7 @@ import threading
 import time
 import unittest
 
-from floability_remote.askpass import (
+from floability_remote.remote.askpass import (
     TOKEN_ENV,
     AskPassBroker,
     PromptKind,

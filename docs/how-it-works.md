@@ -33,8 +33,8 @@ Floability concepts see
 6. [Preparing the remote environment](#6-preparing-the-remote-environment)
 7. [Starting and stopping Floability safely](#7-starting-and-stopping-floability-safely)
 8. [Reaching Jupyter without a manual SSH tunnel](#8-reaching-jupyter-without-a-manual-ssh-tunnel)
-9. [One backend, two clients](#9-one-backend-two-clients)
-10. [Local web server security](#10-local-web-server-security)
+9. [One application layer, two clients](#9-one-application-layer-two-clients)
+10. [Local daemon security](#10-local-daemon-security)
 11. [Safe file downloads](#11-safe-file-downloads)
 12. [Remote-host readiness check](#12-remote-host-readiness-check)
 13. [Testing real scripts without a cluster](#13-testing-real-scripts-without-a-cluster)
@@ -177,7 +177,8 @@ Properties:
   own session, so Ctrl+C in the server's terminal cannot kill remote work
   before cleanup runs.
 
-Implementation: `askpass.py` (broker and helper), `connection.ConnectionManager`.
+Implementation: `remote/askpass.py` (broker and helper),
+`remote.connection.ConnectionManager`.
 
 ## 5. Remote orchestration without installing an agent
 
@@ -187,7 +188,7 @@ when they are missing. Each orchestration step is a small Bash program sent on
 **standard input**:
 
 ```text
- local:  ssh -S sock host  'bash -s -- arg1 arg2 ...'   <  remote_scripts.CLONE_BACKPACK
+ local:  ssh -S sock host  'bash -s -- arg1 arg2 ...'   <  remote.scripts.CLONE_BACKPACK
                                      ▲                       ▲
                      arguments shell-quoted with shlex      script text never touches disk
 ```
@@ -204,7 +205,7 @@ when they are missing. Each orchestration step is a small Bash program sent on
   ```
 
   `output.marker_values()` extracts them; everything else is shown as the log.
-- All scripts live in `remote_scripts.py` and are checked with `bash -n` in the
+- All scripts live in `remote/scripts.py` and are checked with `bash -n` in the
   test suite.
 
 ## 6. Preparing the remote environment
@@ -317,10 +318,11 @@ or depend on site infrastructure:
 The SSH forward is the one mechanism every SSH-accessible cluster already
 allows, which is why the tool automates it rather than replacing it.
 
-## 9. One backend, two clients
+## 9. One application layer, two clients
 
-The CLI and the web interface are thin adapters over the same Python services,
-so a capability added once works in both.
+The CLI and daemon API are thin adapters over the same application operations;
+the browser is a client of that daemon API. The daemon owns the reusable SSH
+connection and background run.
 
 ```text
           CLI (argparse)                          Web (FastAPI routes + static JS)
@@ -339,10 +341,10 @@ so a capability added once works in both.
 ```
 
 - **Typed configuration** (`config.RunConfig`) instead of argparse namespaces.
-- **Structured events** (`events.py`): step, progress, log, ready, warning,
+- **Structured events** (`domain/events.py`): step, progress, log, ready, warning,
   confirmation, cancelling, completed/failed/cancelled. The terminal output is
   byte-for-byte what it was before the refactor.
-- **Confirmation and cancellation interfaces** (`interaction.py`): the CLI
+- **Confirmation and cancellation interfaces** (`domain/interaction.py`): the CLI
   answers questions from the terminal or `--yes`; the web relays them to the
   page. Cancellation is a thread-safe token that triggers the same remote
   cleanup as Ctrl+C.
@@ -354,7 +356,7 @@ so a capability added once works in both.
   position, so a reloaded page replays the run and a dropped stream resumes with
   `Last-Event-ID`.
 
-## 10. Local web server security
+## 10. Local daemon security
 
 `floability-remote web` runs a server on the laptop that can run commands on a
 cluster, so it treats other websites in the same browser as hostile.
@@ -448,4 +450,4 @@ test remains part of release validation.
 - **Output parsing.** Jupyter details and the instance path are read from
   Floability's human-readable output. A machine-readable status from Floability
   would make this sturdier.
-- **One connection and one active run** per web server.
+- **One connection and one active run** per local daemon.

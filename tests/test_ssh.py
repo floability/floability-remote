@@ -3,8 +3,8 @@ import socket
 import unittest
 from unittest import mock
 
-from floability_remote.errors import RemoteRunError
-from floability_remote.ssh import SSHSession, choose_local_port, shell_command
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.remote.ssh import SSHSession, choose_local_port, shell_command
 
 
 class ExitedProcess:
@@ -53,7 +53,7 @@ class SSHUtilityTests(unittest.TestCase):
         session.control_path = "/tmp/control"
         source = io.BytesIO(b"tar data")
         completed = mock.Mock(returncode=0, stdout=b"uploaded\n")
-        with mock.patch("floability_remote.ssh.subprocess.run", return_value=completed) as run:
+        with mock.patch("floability_remote.remote.ssh.subprocess.run", return_value=completed) as run:
             result = session.run_stream("cat >/tmp/archive", ("one",), source)
         self.assertEqual(result.stdout, "uploaded\n")
         self.assertIs(run.call_args.kwargs["stdin"], source)

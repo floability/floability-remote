@@ -9,14 +9,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from floability_remote import remote_scripts
+from floability_remote.remote import scripts as remote_scripts
 from floability_remote.cli import build_parser, validate_args
-from floability_remote.cli_reporter import CliReporter
-from floability_remote.errors import RemoteRunError
-from floability_remote.events import EventKind, ListSink, RedactingSink, Redactor
-from floability_remote.interaction import CancelToken
-from floability_remote.models import RemoteProbe
-from floability_remote.workflow import RemoteWorkflow
+from floability_remote.cli.reporter import CliReporter
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.domain.events import EventKind, ListSink, RedactingSink, Redactor
+from floability_remote.domain.interaction import CancelToken
+from floability_remote.domain.models import RemoteProbe
+from floability_remote.deployment.workflow import RemoteWorkflow
 
 
 def cli_workflow(args):
@@ -139,12 +139,12 @@ class WorkflowTests(unittest.TestCase):
         FakeSession.process_status = 0
         captured = io.StringIO()
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
+            stack.enter_context(mock.patch("floability_remote.deployment.workflow.SSHSession", FakeSession))
             stack.enter_context(
-                mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+                mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE)
             )
             stack.enter_context(
-                mock.patch("floability_remote.workflow.choose_local_port", return_value=49172)
+                mock.patch("floability_remote.deployment.workflow.choose_local_port", return_value=49172)
             )
             stack.enter_context(contextlib.redirect_stdout(captured))
             status = cli_workflow(self.arguments(command, verbose)).start()
@@ -167,9 +167,9 @@ class WorkflowTests(unittest.TestCase):
         args = self.arguments("execute")
         args.floability_option = ["workers=2", "verbose"]
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
+            stack.enter_context(mock.patch("floability_remote.deployment.workflow.SSHSession", FakeSession))
             stack.enter_context(
-                mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+                mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE)
             )
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
             cli_workflow(args).start()
@@ -198,8 +198,8 @@ class WorkflowTests(unittest.TestCase):
             FakeSession.process_output = ""
             captured = io.StringIO()
             with contextlib.ExitStack() as stack:
-                stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
-                stack.enter_context(mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE))
+                stack.enter_context(mock.patch("floability_remote.deployment.workflow.SSHSession", FakeSession))
+                stack.enter_context(mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE))
                 stack.enter_context(contextlib.redirect_stdout(captured))
                 cli_workflow(args).start()
         self.assertIn("Uploading backpack from", captured.getvalue())
@@ -210,11 +210,11 @@ class WorkflowTests(unittest.TestCase):
         FakeSession.process_status = 0
         with contextlib.ExitStack() as stack:
             stack.enter_context(
-                mock.patch("floability_remote.workflow.SSHSession", FakeSession)
+                mock.patch("floability_remote.deployment.workflow.SSHSession", FakeSession)
             )
             stack.enter_context(
                 mock.patch(
-                    "floability_remote.workflow.ensure_environment", return_value=PROBE
+                    "floability_remote.deployment.workflow.ensure_environment", return_value=PROBE
                 )
             )
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
@@ -246,9 +246,9 @@ class WorkflowTests(unittest.TestCase):
         FakeSession.process_status = 7
         captured = io.StringIO()
         with contextlib.ExitStack() as stack:
-            stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", FakeSession))
+            stack.enter_context(mock.patch("floability_remote.deployment.workflow.SSHSession", FakeSession))
             stack.enter_context(
-                mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+                mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE)
             )
             stack.enter_context(contextlib.redirect_stdout(captured))
             with self.assertRaisesRegex(
@@ -324,12 +324,12 @@ def config(mode="execute"):
 
 class StructuredWorkflowTests(unittest.TestCase):
     def patches(self, stack, session_class):
-        stack.enter_context(mock.patch("floability_remote.workflow.SSHSession", session_class))
+        stack.enter_context(mock.patch("floability_remote.deployment.workflow.SSHSession", session_class))
         stack.enter_context(
-            mock.patch("floability_remote.workflow.ensure_environment", return_value=PROBE)
+            mock.patch("floability_remote.deployment.workflow.ensure_environment", return_value=PROBE)
         )
         stack.enter_context(
-            mock.patch("floability_remote.workflow.choose_local_port", return_value=49172)
+            mock.patch("floability_remote.deployment.workflow.choose_local_port", return_value=49172)
         )
 
     def test_execute_emits_steps_and_terminal_outcome(self):

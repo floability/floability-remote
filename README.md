@@ -148,6 +148,21 @@ The server listens only on `127.0.0.1`, prints a sign-in link, and opens it in
 your browser. Use `--port` to choose the port and `--no-browser` to only print
 the link. Press Ctrl+C to stop it.
 
+For a headless process that survives the terminal which started it, use the
+daemon lifecycle commands instead:
+
+```bash
+floability-remote daemon start
+floability-remote daemon status
+floability-remote daemon stop
+```
+
+`daemon start` reuses an existing healthy daemon and opens its sign-in page.
+An idle daemon stops after one hour only when it has no SSH connection or
+active run. `daemon stop` closes the connection cleanly; when a run is active,
+it refuses unless you explicitly use `daemon stop --yes`, which cancels the
+run and waits for remote cleanup.
+
 From the browser you can:
 
 - connect to a login node; passwords, MFA codes, and new host keys are asked
@@ -398,36 +413,21 @@ credential forwarding is not implemented.
 ```text
 src/
 └── floability_remote/
-    ├── cli.py              argument parsing; adapter to the shared services
-    ├── cli_reporter.py     terminal rendering of workflow events
-    ├── cluster.py          read-only remote readiness and storage checks
-    ├── config.py           typed run configuration and validation
-    ├── events.py           structured events, sinks, and secret redaction
-    ├── files.py            safe retained-file inventory and download service
-    ├── interaction.py      confirmation callbacks and cancellation
-    ├── askpass.py          relay of SSH prompts to a client (web sign-in)
-    ├── connection.py       long-lived SSH connection for the web interface
-    ├── runs.py             background runs, event history, and cancellation
-    ├── environment.py      remote Conda and Floability setup
-    ├── workspace.py        remote run directory and backpack clone
-    ├── workflow.py         shared run/execute orchestration
-    ├── models.py           shared data structures
-    ├── output.py           remote marker and Floability output parsing
-    ├── remote_scripts.py   Bash programs sent through SSH
-    ├── ssh.py              OpenSSH sessions and tunnels
-    └── web/
-        ├── server.py       `floability-remote web` startup
-        ├── app.py          FastAPI application factory
-        ├── security.py     loopback, origin, and session checks
-        ├── schemas.py      API request and response models
-        ├── errors.py       JSON error envelope
-        ├── routes/         thin `/api/v1` routes
-        └── static/         packaged HTML, CSS, and JavaScript client
+    ├── domain/             configuration, events, errors, and value objects
+    ├── remote/             OpenSSH, AskPass, output parsing, and remote scripts
+    ├── deployment/         environment, workspace, workflow, and run lifecycle
+    ├── services/           backpack, host-check, file, and TaskVine services
+    ├── application/        operations, contracts, runtime, validation, and audit
+    ├── cli/                terminal parsing, commands, prompts, and rendering
+    ├── daemon/             loopback API, lifecycle, discovery, and security
+    └── web/                browser assets and compatibility imports
 ```
 
-The CLI and web API are adapters around the same services: deployment logic
-lives in `cluster`, `config`, `environment`, `files`, `workspace`, and
-`workflow`, never in argument parsing, API routes, or JavaScript.
+The CLI and daemon API are adapters around the same application operations.
+The browser calls the daemon API. Deployment logic lives in the application
+and lower-level packages, never in argument parsing, API routes, or JavaScript.
+The daemon writes a private discovery record for future local clients and a
+size-bounded, secret-redacted operation audit under the user's state directory.
 
 ## Tests
 

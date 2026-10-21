@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from floability_remote import remote_scripts
-from floability_remote.errors import RemoteRunError
-from floability_remote.files import FileService, MAX_DOWNLOAD_BYTES
+from floability_remote.remote import scripts as remote_scripts
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.services.files import FileService, MAX_DOWNLOAD_BYTES
 
 
 class LocalScriptSession:

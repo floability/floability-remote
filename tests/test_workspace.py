@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from floability_remote.config import BackpackSource
-from floability_remote.events import Emitter, ListSink
-from floability_remote.workspace import create_workspace
+from floability_remote.domain.config import BackpackSource
+from floability_remote.domain.events import Emitter, ListSink
+from floability_remote.deployment.workspace import create_workspace
 
 
 class Session:

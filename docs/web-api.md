@@ -10,13 +10,12 @@ Floability execution, events, cancellation, and cleanup live in shared Python
 services used by both the CLI and the API:
 
 ```text
-config.py        RunConfig and validation (run_config_issues, validate_run_config)
-events.py        Event, EventSink, Emitter, Redactor, RedactingSink
-interaction.py   ConfirmationRequest/Confirm callback and CancelToken
-environment.py   remote Conda and Floability setup
-workspace.py     remote run directory and backpack clone/upload
-local_backpack.py local folder/ZIP inspection, packing, upload, clone, and provenance
-workflow.py      RemoteWorkflow: run/execute orchestration, tunnel, cleanup
+domain/          typed configuration, events, errors, and interaction contracts
+remote/          OpenSSH transport, AskPass, output parsing, and remote scripts
+deployment/      environment setup, workspaces, workflow, and background runs
+services/        backpack, host-check, retained-file, and TaskVine services
+application/     interface-neutral operations, contracts, validation, and runtime
+daemon/          authenticated HTTP adapter and daemon lifecycle
 ```
 
 ## Starting the server
@@ -168,7 +167,7 @@ uploads the folder's current files. Git clones become normal editable folders
 under `~/floability-backpacks/`. A chosen ZIP is kept unchanged in a private
 temporary folder (browsers cannot reveal its path) and each run uploads its
 files as they are. The CLI calls the same
-`local_backpack.py` service without using HTTP.
+`services/backpacks.py` service without using HTTP.
 
 | Method and path | Purpose |
 |---|---|
@@ -190,11 +189,11 @@ files.
 
 ### Connection
 
-The web server keeps at most one authenticated SSH connection
+The local daemon keeps at most one authenticated SSH connection
 (`connection.ConnectionManager`). It authenticates through OpenSSH with
 `SSH_ASKPASS_REQUIRE=force` (OpenSSH 8.4 or newer): every password, key
 passphrase, keyboard-interactive (MFA), and unknown host-key question is
-relayed to the page through a private Unix socket (`askpass.py`). Answers stay
+relayed to the page through a private Unix socket (`remote/askpass.py`). Answers stay
 in memory, are written only to ssh's pipe, and are never logged or stored.
 After sign-in, commands reuse the control master with `BatchMode=yes`, so they
 can never fall back to a terminal prompt. The master uses keepalives and is
@@ -292,7 +291,7 @@ and closes the connection.
 `local_port` selects the local port (otherwise a free port is chosen) and
 `jupyter_port` the requested remote port.
 
-Lifecycle: the session belongs to the web server, not the browser tab.
+Lifecycle: the session belongs to the local daemon, not the browser tab.
 Closing the tab leaves Jupyter running so it can still be used in its own tab;
 reopening the page shows the link again. Stopping the server stops the
 session. There is no idle timeout yet.
@@ -313,7 +312,7 @@ Downloads use the opaque `id` returned by the inventory and re-run discovery
 before opening the file with no-follow protection. The first version limits an
 inventory to 2,000 files and each download to 100 MiB.
 
-The web server reuses its open SSH master. The standalone CLI equivalent is:
+The local daemon reuses its open SSH master. The standalone CLI equivalent is:
 
 ```bash
 floability-remote download --target <USER@HOST> --run-dir <REMOTE_RUN_DIR>

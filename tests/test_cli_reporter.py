@@ -4,10 +4,10 @@ import unittest
 from unittest import mock
 
 from floability_remote.cli import terminal_confirmation
-from floability_remote.cli_reporter import CliReporter
-from floability_remote.errors import RemoteRunError
-from floability_remote.events import Event, EventKind
-from floability_remote.interaction import INSTALL_MINIFORGE, ConfirmationRequest
+from floability_remote.cli.reporter import CliReporter
+from floability_remote.domain.errors import RemoteRunError
+from floability_remote.domain.events import Event, EventKind
+from floability_remote.domain.interaction import INSTALL_MINIFORGE, ConfirmationRequest
 
 
 EVENTS = (

@@ -6,10 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from floability_remote import remote_scripts
-from floability_remote.cluster import ClusterService, validate_cluster_settings
-from floability_remote.config import EnvironmentConfig
-from floability_remote.errors import RemoteRunError
+from floability_remote.remote import scripts as remote_scripts
+from floability_remote.services.cluster import ClusterService, validate_cluster_settings
+from floability_remote.domain.config import EnvironmentConfig
+from floability_remote.domain.errors import RemoteRunError
 
 
 PROBE_OUTPUT = """\

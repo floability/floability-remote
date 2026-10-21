@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from floability_remote.cli import build_parser, run_download
-from floability_remote.files import FileInventory, RemoteFile
+from floability_remote.services.files import FileInventory, RemoteFile
 
 
 FILE = RemoteFile(
