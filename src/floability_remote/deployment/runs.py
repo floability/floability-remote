@@ -9,7 +9,7 @@ normal remote cleanup. One run may be active at a time.
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 from typing import Callable, Dict, List, Optional
 
@@ -60,6 +60,8 @@ class Run:
         self.message: Optional[str] = None
         self.result: Dict[str, str] = {}
         self.jupyter_url: Optional[str] = None
+        self.jupyter_local_port: Optional[int] = None
+        self.jupyter_remote_port: Optional[int] = None
         # Known from "Backpack ready" onward, so live views can read the run.
         self.remote_run_dir: Optional[str] = None
         self.cancel_token = CancelToken()
@@ -74,9 +76,27 @@ class Run:
 
     def emit(self, event: Event) -> None:
         with self._changed:
-            self._events.append(event)
             if event.kind == EventKind.READY:
                 self.jupyter_url = event.data.get("url")
+                local_port = event.data.get("local_port")
+                remote_port = event.data.get("remote_port")
+                self.jupyter_local_port = (
+                    local_port if isinstance(local_port, int) else None
+                )
+                self.jupyter_remote_port = (
+                    remote_port if isinstance(remote_port, int) else None
+                )
+                # Keep the working URL only in trusted in-memory run state. It
+                # must not enter replayable event streams or model history.
+                event = replace(
+                    event,
+                    data={
+                        key: value
+                        for key, value in event.data.items()
+                        if "url" not in key.lower() and "token" not in key.lower()
+                    },
+                )
+            self._events.append(event)
             backpack_dir = event.data.get("backpack_dir")
             if self.remote_run_dir is None and isinstance(backpack_dir, str):
                 # Workspaces always place the backpack at <run_dir>/backpack.

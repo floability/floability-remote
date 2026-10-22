@@ -19,8 +19,10 @@ from ..application.contracts import (
     DeploymentPlanResponse,
     EnvironmentModel,
     FloabilityOptionModel,
+    InteractiveSessionResponse,
     RunEventPageResponse,
     RunResponse,
+    TaskVineStatusResponse,
 )
 from ..application.errors import OperationError
 from ..daemon.client import DaemonClient
@@ -169,8 +171,8 @@ class MCPTools:
     def validate_deployment(
         self,
         source_id: str,
-        mode: str,
-        batch_type: str,
+        mode: Literal["run", "execute"],
+        batch_type: Literal["local", "slurm", "condor", "uge"],
         entrypoint: str = "",
         env_name: str = DEFAULT_ENV_NAME,
         floability_version: str = "",
@@ -206,7 +208,7 @@ class MCPTools:
         )
 
     def start_deployment(self, plan_id: str) -> RunResponse:
-        """Start an execute-mode deployment from a validated plan ID."""
+        """Start an execute or interactive deployment from a validated plan ID."""
         return self._safe_run(self._client().start_deployment(plan_id))
 
     def get_run(self, run_id: str) -> RunResponse:
@@ -256,6 +258,14 @@ class MCPTools:
     def cancel_run(self, run_id: str) -> RunResponse:
         """Request cleanup-aware cancellation of one active deployment."""
         return self._safe_run(self._client().cancel_run(run_id))
+
+    def get_interactive_session(self, run_id: str) -> InteractiveSessionResponse:
+        """Return Jupyter tunnel readiness without exposing its token-bearing URL."""
+        return self._client().get_interactive_session(run_id)
+
+    def get_taskvine_status(self, run_id: str) -> TaskVineStatusResponse:
+        """Return a live TaskVine manager, worker, task, and factory snapshot."""
+        return self._client().taskvine_status(run_id)
 
     @staticmethod
     def _safe_run(run: RunResponse) -> RunResponse:

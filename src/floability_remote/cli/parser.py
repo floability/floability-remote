@@ -91,6 +91,22 @@ def build_parser() -> argparse.ArgumentParser:
         "disconnect", help="Close the reusable daemon-owned SSH connection."
     )
 
+    session_parser = commands.add_parser(
+        "session", help="Inspect or open an interactive session."
+    )
+    session_commands = session_parser.add_subparsers(
+        dest="session_command", required=True
+    )
+    session_open = session_commands.add_parser(
+        "open", help="Open a ready session's local Jupyter URL."
+    )
+    session_open.add_argument("run_id")
+    session_open.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Print the local URL without opening a browser.",
+    )
+
     commands.add_parser(
         "mcp", help="Run the Floability Remote MCP server over standard input/output."
     )

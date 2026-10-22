@@ -207,5 +207,28 @@ class RunEventPageResponse(BaseModel):
     timed_out: bool = False
 
 
+class InteractiveSessionResponse(BaseModel):
+    """Model-safe state for one interactive deployment and its SSH tunnel."""
+
+    run_id: str
+    state: str = Field(description="starting, ready, stopping, stopped, or failed.")
+    run_state: str
+    tunnel_ready: bool
+    local_port: Optional[int] = None
+    remote_port: Optional[int] = None
+    url_available: bool = Field(
+        description="True when a trusted local client may retrieve the Jupyter URL."
+    )
+    message: str
+    cancel_requested: bool = False
+
+
+class InteractiveUrlResponse(BaseModel):
+    """Trusted local response containing the token-bearing Jupyter URL."""
+
+    run_id: str
+    url: str
+
+
 class ConfirmationAnswer(StrictModel):
     approved: bool

@@ -96,6 +96,7 @@ export const api = {
   startRun: (config) => request("POST", "/runs", config),
   currentRun: () => request("GET", "/runs/current"),
   run: (runId) => request("GET", `/runs/${segment(runId)}`),
+  interactiveUrl: (runId) => request("GET", `/runs/${segment(runId)}/interactive/url`),
   runFiles: (runId) => request("GET", `/runs/${segment(runId)}/files`),
   taskvineStatus: (runId) => request("GET", `/runs/${segment(runId)}/taskvine`),
   downloadUrl: (runId, fileId) =>

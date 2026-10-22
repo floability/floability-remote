@@ -5,6 +5,7 @@ import getpass
 import shlex
 import sys
 import time
+import webbrowser
 from pathlib import Path
 
 from ..application.errors import OperationError
@@ -186,6 +187,21 @@ def run_disconnect(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_session(args: argparse.Namespace) -> int:
+    """Retrieve a Jupyter URL through the trusted local daemon control plane."""
+    from ..daemon.client import DaemonClient
+
+    if args.session_command != "open":
+        raise OperationError("unknown_session_command", args.session_command)
+    response = DaemonClient.discover(client="cli-session").get_interactive_url(
+        args.run_id
+    )
+    print(f"Open Jupyter: {response.url}")
+    if not args.no_browser:
+        webbrowser.open(response.url)
+    return 0
+
+
 def run_mcp(args: argparse.Namespace) -> int:
     """Run the optional stdio MCP adapter without polluting protocol stdout."""
     try:
@@ -325,6 +341,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return run_connect(args)
     if args.command == "disconnect":
         return run_disconnect(args)
+    if args.command == "session":
+        return run_session(args)
     if args.command == "mcp":
         return run_mcp(args)
     if args.command == "agent":

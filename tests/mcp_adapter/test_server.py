@@ -63,6 +63,8 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
                     "get_run_events",
                     "answer_confirmation",
                     "cancel_run",
+                    "get_interactive_session",
+                    "get_taskvine_status",
                 },
             )
             self.assertTrue(tools["get_status"].annotations.read_only_hint)
@@ -71,6 +73,8 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(tools["check_remote"].annotations.read_only_hint)
             self.assertFalse(tools["start_deployment"].annotations.read_only_hint)
             self.assertTrue(tools["wait_for_run"].annotations.read_only_hint)
+            self.assertTrue(tools["get_interactive_session"].annotations.read_only_hint)
+            self.assertTrue(tools["get_taskvine_status"].annotations.read_only_hint)
             self.assertEqual(
                 set(tools["connect_remote"].input_schema["properties"]),
                 {"target", "identity_file"},
@@ -84,6 +88,12 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
             wait_properties = tools["wait_for_run"].input_schema["properties"]
             self.assertEqual(wait_properties["timeout_seconds"]["maximum"], 30)
             self.assertEqual(wait_properties["limit"]["maximum"], 200)
+            validation = tools["validate_deployment"].input_schema["properties"]
+            self.assertEqual(validation["mode"]["enum"], ["run", "execute"])
+            self.assertEqual(
+                validation["batch_type"]["enum"],
+                ["local", "slurm", "condor", "uge"],
+            )
 
             result = await client.call_tool("get_status", {})
             self.assertFalse(result.is_error)

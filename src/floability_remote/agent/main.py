@@ -7,6 +7,7 @@ import sys
 from typing import Any, List
 
 from ..application.errors import OperationError
+from ..daemon.client import DaemonClient
 from ..daemon.lifecycle import start as start_daemon
 from .connection import ConnectionPromptRelay
 from .models import create_model, parse_model
@@ -38,6 +39,35 @@ async def _ask(agent, prompt: str, history: List[Any], relay: ConnectionPromptRe
     return result.all_messages()
 
 
+async def _session_notifier(client: DaemonClient, stop: asyncio.Event) -> None:
+    """Print token-bearing Jupyter links without adding them to model history."""
+    notified = set()
+    while not stop.is_set():
+        try:
+            run = client.current_run()
+            if run.mode == "run" and run.id not in notified:
+                session = client.get_interactive_session(run.id)
+                if session.url_available:
+                    trusted = client.get_interactive_url(run.id)
+                    print(f"\n[session] Open Jupyter: {trusted.url}", flush=True)
+                    notified.add(run.id)
+        except OperationError as error:
+            if error.code not in {
+                "run_not_found",
+                "not_interactive",
+                "interactive_not_ready",
+                "daemon_unreachable",
+            }:
+                print(
+                    f"\n[session] Unable to read session state: {error}",
+                    file=sys.stderr,
+                )
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=0.25)
+        except asyncio.TimeoutError:
+            pass
+
+
 async def _chat(args: argparse.Namespace) -> int:
     selection = parse_model(args.model, args.ollama_base_url)
     model = create_model(selection)
@@ -52,23 +82,36 @@ async def _chat(args: argparse.Namespace) -> int:
     relay = ConnectionPromptRelay()
     agent = create_agent(model, policy)
     history: List[Any] = []
-    async with agent:
-        if args.prompt:
-            await _ask(agent, args.prompt, history, relay)
-            return 0
+    notifier_stop = asyncio.Event()
+    notifier = asyncio.create_task(
+        _session_notifier(
+            DaemonClient(descriptor, client="agent-control"), notifier_stop
+        )
+    )
+    try:
+        async with agent:
+            if args.prompt:
+                await _ask(agent, args.prompt, history, relay)
+                return 0
 
-        print("Ask about Floability Remote status, or type 'quit' to exit.", flush=True)
-        while True:
-            try:
-                prompt = await asyncio.to_thread(input, "\nyou> ")
-            except EOFError:
-                print()
-                return 0
-            if prompt.strip().lower() in {"quit", "exit"}:
-                return 0
-            if not prompt.strip():
-                continue
-            history = await _ask(agent, prompt, history, relay)
+            print(
+                "Ask about Floability Remote status, or type 'quit' to exit.",
+                flush=True,
+            )
+            while True:
+                try:
+                    prompt = await asyncio.to_thread(input, "\nyou> ")
+                except EOFError:
+                    print()
+                    return 0
+                if prompt.strip().lower() in {"quit", "exit"}:
+                    return 0
+                if not prompt.strip():
+                    continue
+                history = await _ask(agent, prompt, history, relay)
+    finally:
+        notifier_stop.set()
+        await notifier
 
 
 def run(args: argparse.Namespace) -> int:

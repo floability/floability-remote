@@ -202,13 +202,17 @@ floability-remote mcp
 
 The MCP tools can inspect status, manage a daemon-owned SSH connection, check
 remote readiness, inspect Git/local/ZIP backpacks, safely preview their files,
-validate an execute-mode deployment plan, and start and monitor that plan.
+validate execute or interactive deployment plans, start and monitor them, and
+report TaskVine activity.
 Runs return immediately with a `run_id`; bounded cursor-based calls report
 redacted progress, pending confirmations, completion, and retained remote
 paths. The MCP process does not own SSH or deployment state; it calls the
 authenticated local daemon, which records requests with an `mcp` client
 identity. Passwords, MFA answers, key passphrases, bearer tokens, and Jupyter
 tokens must never be passed through MCP.
+
+Interactive readiness is model-safe. The working Jupyter URL is delivered by
+the trusted terminal or browser, never through MCP or model history.
 
 External MCP hosts can reuse a passwordless connection requested by a tool. If
 the host needs a password, MFA response, key passphrase, or new-host

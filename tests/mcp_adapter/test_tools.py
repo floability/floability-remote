@@ -12,8 +12,10 @@ from floability_remote.application.contracts import (
     ConnectionResponse,
     DeploymentPlanResponse,
     IndexedEventModel,
+    InteractiveSessionResponse,
     RunEventPageResponse,
     RunResponse,
+    TaskVineStatusResponse,
 )
 from floability_remote.application.errors import OperationError
 from floability_remote.mcp.tools import MCPTools
@@ -273,6 +275,38 @@ class MCPToolsTests(unittest.TestCase):
             "run-1", "confirm-1", True
         )
         client.cancel_run.assert_called_once_with("run-1")
+
+    def test_phase5_tools_return_model_safe_session_and_taskvine_state(self):
+        client = mock.Mock()
+        client.get_interactive_session.return_value = InteractiveSessionResponse(
+            run_id="run-1",
+            state="ready",
+            run_state="running",
+            tunnel_ready=True,
+            local_port=49172,
+            remote_port=8888,
+            url_available=True,
+            message="Jupyter is ready through the daemon-owned SSH tunnel.",
+        )
+        client.taskvine_status.return_value = TaskVineStatusResponse(
+            run_id="run-1",
+            available=True,
+            uses_taskvine=True,
+            manager_state="running",
+            workers_connected=2,
+            checked_at=1.0,
+        )
+        tools = MCPTools(client_factory=lambda kind, session: client)
+
+        interactive = tools.get_interactive_session("run-1")
+        taskvine = tools.get_taskvine_status("run-1")
+
+        self.assertEqual(interactive.local_port, 49172)
+        self.assertTrue(interactive.url_available)
+        self.assertFalse(hasattr(interactive, "url"))
+        self.assertEqual(taskvine.workers_connected, 2)
+        client.get_interactive_session.assert_called_once_with("run-1")
+        client.taskvine_status.assert_called_once_with("run-1")
 
 
 if __name__ == "__main__":

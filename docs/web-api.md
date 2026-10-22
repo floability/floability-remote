@@ -199,7 +199,7 @@ routes are authenticated loopback APIs; they do not start a run.
 | `POST /api/v1/backpacks/sources/files` | List files included by the backpack safety rules. |
 | `POST /api/v1/backpacks/sources/read` | Read one named UTF-8 file, limited to 128 KB. |
 | `POST /api/v1/plans/validate` | Combine `source_id` with run settings and the open SSH connection, verify the entrypoint and detected batch system, and return a `plan_id` only when valid. |
-| `POST /api/v1/plans/{plan_id}/start` | Start one execute-mode deployment from a fresh plan and return its `run_id` immediately. |
+| `POST /api/v1/plans/{plan_id}/start` | Start one execute or interactive deployment from a fresh plan and return its `run_id` immediately. |
 | `GET /api/v1/runs/{run_id}/event-page` | Read a bounded cursor-based page of retained redacted events. Raw log events are optional. |
 | `GET /api/v1/runs/{run_id}/wait` | Wait at most 30 seconds for progress, confirmation, or completion and return an event page. |
 
@@ -208,7 +208,7 @@ time. Reconnecting or modifying a local source makes the plan stale. Source
 snapshots and plans are removed when the daemon exits.
 
 Only one run may be active. Starting checks the source fingerprint and exact
-SSH connection again; stale and interactive plans are refused. The normal run
+SSH connection again; stale plans are refused. The normal run
 status, confirmation, and cancellation routes remain authoritative, and
 cancellation uses Floability's cleanup path.
 
@@ -283,6 +283,8 @@ and closes the connection.
 | `POST /api/v1/runs` | `RunRequest` with `mode` `execute` or `run` → `201` `RunResponse`. `409` without a matching connection or while another run is active; `422 invalid_config`. |
 | `GET /api/v1/runs/current` | The active or most recent run; `404` if none. |
 | `GET /api/v1/runs/{id}` | Run state, result paths, Jupyter link, and any pending `confirmation`. |
+| `GET /api/v1/runs/{id}/interactive` | Model-safe interactive and tunnel state: `starting`, `ready`, `stopping`, `stopped`, or `failed`, plus ports and `url_available`. Never contains a token. |
+| `GET /api/v1/runs/{id}/interactive/url` | Trusted authenticated local-control response containing the working Jupyter URL while ready. Not exposed through MCP. |
 | `GET /api/v1/runs/{id}/events` | Server-Sent Events (below). |
 | `GET /api/v1/runs/{id}/files` | Approved regular files retained by a finished run. Requires the matching SSH connection. |
 | `GET /api/v1/runs/{id}/files/{file_id}/download` | Revalidate and download one listed file. |
@@ -303,10 +305,11 @@ and closes the connection.
 2. It opens a local forward (`127.0.0.1:<local_port>` → the remote Jupyter
    port) through the open control master and waits until the local port
    accepts connections.
-3. Only then does it emit `ready` with `data.url`
-   (`http://127.0.0.1:<local_port>/lab/?token=…`). `RunResponse.jupyter_url`
-   holds the same link while the session is ready and is cleared when the run
-   ends. The web page shows it as **Open JupyterLab**.
+3. Only then does it retain the working URL in trusted in-memory run state.
+   Replayable `ready` events contain the local and remote ports but never the
+   URL or token. `RunResponse.jupyter_url` holds the link for the authenticated
+   browser while the session is ready and is cleared when the run ends. The web
+   page shows it as **Open JupyterLab**.
 4. The run stays `running` until it is stopped with `POST /runs/{id}/cancel`.
    Floability receives SIGINT and stops Jupyter and its workers; the
    workflow then closes the tunnel and cancels the forward on the master
@@ -315,6 +318,10 @@ and closes the connection.
 
 `local_port` selects the local port (otherwise a free port is chosen) and
 `jupyter_port` the requested remote port.
+
+The built-in agent prints the link through its trusted terminal control plane,
+outside model history. An external MCP host can retrieve it in a separate
+terminal with `floability-remote session open <RUN_ID>`.
 
 Lifecycle: the session belongs to the local daemon, not the browser tab.
 Closing the tab leaves Jupyter running so it can still be used in its own tab;

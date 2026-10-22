@@ -30,6 +30,23 @@ class RecordingClient(DaemonClient):
 
     def request(self, method, path, payload=None, timeout=5):
         self.calls.append((method, path, payload, timeout))
+        if path.endswith("/interactive/url"):
+            return {
+                "run_id": "run-1",
+                "url": "http://127.0.0.1:49172/lab/?token=private",
+            }
+        if path.endswith("/interactive"):
+            return {
+                "run_id": "run-1",
+                "state": "ready",
+                "run_state": "running",
+                "tunnel_ready": True,
+                "local_port": 49172,
+                "remote_port": 8888,
+                "url_available": True,
+                "message": "ready",
+                "cancel_requested": False,
+            }
         if path.endswith("/event-page?cursor=4&limit=12&include_logs=true"):
             return {
                 "run": run_payload(),
@@ -83,6 +100,18 @@ class DaemonClientPhase4Tests(unittest.TestCase):
             ),
         )
         self.assertEqual(client.calls[1][:2], ("GET", "/runs/run-1"))
+
+    def test_interactive_status_and_trusted_url_paths(self):
+        client = RecordingClient()
+
+        session = client.get_interactive_session("run-1")
+        trusted = client.get_interactive_url("run-1")
+
+        self.assertEqual(session.local_port, 49172)
+        self.assertTrue(session.url_available)
+        self.assertIn("token=private", trusted.url)
+        self.assertEqual(client.calls[0][:2], ("GET", "/runs/run-1/interactive"))
+        self.assertEqual(client.calls[1][:2], ("GET", "/runs/run-1/interactive/url"))
 
 
 if __name__ == "__main__":

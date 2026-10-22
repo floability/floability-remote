@@ -1,11 +1,68 @@
+import asyncio
+import io
 import importlib.util
 import unittest
+from contextlib import redirect_stdout
+
+from floability_remote.application.contracts import (
+    InteractiveSessionResponse,
+    InteractiveUrlResponse,
+    RunResponse,
+)
+from floability_remote.agent.main import _session_notifier
 
 
 AGENT_AVAILABLE = all(
     importlib.util.find_spec(name) is not None
     for name in ("fastmcp", "mcp", "pydantic_ai")
 )
+
+
+class SessionNotifierTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ready_url_is_printed_by_trusted_control_plane(self):
+        class Client:
+            def current_run(self):
+                return RunResponse(
+                    id="run-1",
+                    mode="run",
+                    state="running",
+                    target="user@host",
+                    repository="repo",
+                    ref="",
+                    batch_type="local",
+                    entrypoint="main.ipynb",
+                    created_at=1.0,
+                    event_count=1,
+                )
+
+            def get_interactive_session(self, run_id):
+                return InteractiveSessionResponse(
+                    run_id=run_id,
+                    state="ready",
+                    run_state="running",
+                    tunnel_ready=True,
+                    local_port=49172,
+                    remote_port=8888,
+                    url_available=True,
+                    message="ready",
+                )
+
+            def get_interactive_url(self, run_id):
+                return InteractiveUrlResponse(
+                    run_id=run_id,
+                    url="http://127.0.0.1:49172/lab/?token=private",
+                )
+
+        stop = asyncio.Event()
+        output = io.StringIO()
+        with redirect_stdout(output):
+            task = asyncio.create_task(_session_notifier(Client(), stop))
+            await asyncio.sleep(0.02)
+            stop.set()
+            await task
+
+        self.assertEqual(output.getvalue().count("Open Jupyter:"), 1)
+        self.assertIn("token=private", output.getvalue())
 
 
 @unittest.skipUnless(AGENT_AVAILABLE, "install the agent extra for integration tests")
@@ -44,6 +101,8 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "get_run_events",
                 "answer_confirmation",
                 "cancel_run",
+                "get_interactive_session",
+                "get_taskvine_status",
             },
         )
         self.assertIn("get_status", result.output)

@@ -120,7 +120,7 @@ interactive login, establish the reusable connection separately:
 floability-remote connect <USER@LOGIN_NODE>
 ```
 
-## Inspect, plan, and execute a deployment
+## Inspect, plan, and run a deployment
 
 After connecting, ask the agent to inspect and plan a backpack:
 
@@ -140,6 +140,22 @@ does not execute anything by itself. `start_deployment` accepts only that
 validated plan ID and returns immediately with a `run_id`. The agent follows
 the run with bounded waits and cursor-based redacted events. On completion it
 reports the retained remote workspace and command log.
+
+For an interactive backpack, ask for `mode=run`. The agent waits for Jupyter,
+reports model-safe tunnel readiness, and can inspect TaskVine manager, worker,
+task, and factory progress. When Jupyter becomes ready, the trusted terminal
+control plane prints the working link separately:
+
+```text
+[session] Open Jupyter: http://127.0.0.1:<port>/lab/?token=<token>
+```
+
+The token is never given to the model or returned by an MCP tool. External MCP
+hosts can open the same ready session outside their model-facing channel:
+
+```bash
+floability-remote session open <RUN_ID>
+```
 
 If remote environment preparation requires confirmation, the agent explains
 the pending question and the terminal asks for approval before the answer is
@@ -178,10 +194,12 @@ The current agent can:
 - inspect Git repositories, local folders, and ZIP backpacks;
 - safely list and preview backpack files; and
 - validate settings into a connection- and source-bound deployment plan;
-- start one execute-mode run from that plan;
+- start either an execute-mode or interactive run from that plan;
 - follow bounded, redacted progress and answer approved installation prompts;
+- report model-safe Jupyter tunnel readiness and live TaskVine status;
+- deliver the working Jupyter link through trusted terminal output;
 - cancel through Floability's cleanup path; and
 - report the final state, retained workspace, and command log.
 
-Interactive Jupyter runs, result downloads through the agent, and automated
-failure diagnosis are added in later phases.
+Result downloads through the agent and automated failure diagnosis are added
+in later phases.

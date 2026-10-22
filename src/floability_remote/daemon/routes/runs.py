@@ -13,6 +13,8 @@ from ...application.runtime import ApplicationRuntime
 from ...deployment.runs import Run
 from ..schemas import (
     ConfirmationAnswer,
+    InteractiveSessionResponse,
+    InteractiveUrlResponse,
     RunEventPageResponse,
     RunRequest,
     RunResponse,
@@ -71,6 +73,26 @@ def get_run(
     client: ClientContext = Depends(get_client),
 ) -> RunResponse:
     return deployments.get(runtime, run_id, client)
+
+
+@router.get("/{run_id}/interactive", response_model=InteractiveSessionResponse)
+def get_interactive_session(
+    run_id: str,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> InteractiveSessionResponse:
+    """Return interactive readiness and tunnel state without the Jupyter token."""
+    return deployments.interactive_session(runtime, run_id, client)
+
+
+@router.get("/{run_id}/interactive/url", response_model=InteractiveUrlResponse)
+def get_interactive_url(
+    run_id: str,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> InteractiveUrlResponse:
+    """Return the token-bearing URL to a trusted authenticated local client."""
+    return deployments.interactive_url(runtime, run_id, client)
 
 
 @router.get("/{run_id}/event-page", response_model=RunEventPageResponse)

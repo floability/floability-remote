@@ -203,15 +203,19 @@ class Phase4ApiTests(unittest.TestCase):
         wait_until(lambda: self.runs.get(run_id).finished)
         self.assertEqual(answers, [True])
 
-    def test_start_rejects_interactive_and_stale_plans(self):
+    def test_start_accepts_interactive_and_rejects_stale_plans(self):
+        def finish(workflow):
+            workflow.emit(EventKind.COMPLETED, "interactive ended")
+
+        LifecycleWorkflow.behavior = finish
         interactive = self.planning.create_plan(
             self.plan.source_id,
             replace(self.config, mode="run"),
             42.0,
         )
         response = self.client.post(f"/api/v1/plans/{interactive.id}/start")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"]["code"], "execute_only")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["mode"], "run")
 
         self.connections.connected_at = 43.0
         response = self.client.post(f"/api/v1/plans/{self.plan.id}/start")

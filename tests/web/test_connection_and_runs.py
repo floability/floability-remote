@@ -213,7 +213,7 @@ class ConnectionAndRunApiTests(unittest.TestCase):
         events = parse_sse(self.client.get(f"/api/v1/runs/{run['id']}/events").text)
         log, ready_event = events[0][2], events[1][2]
         self.assertEqual(log["message"], "[jupyter] ... token [REDACTED].\n")
-        self.assertEqual(ready_event["data"]["url"], url)
+        self.assertEqual(ready_event["data"], {"local_port": 49999})
 
     def test_invalid_run_reports_field_issues(self):
         response = self.client.post(

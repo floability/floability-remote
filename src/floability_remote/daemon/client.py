@@ -24,6 +24,8 @@ from ..application.contracts import (
     DeploymentPlanRequest,
     DeploymentPlanResponse,
     FileListResponse,
+    InteractiveSessionResponse,
+    InteractiveUrlResponse,
     RunRequest,
     RunEventPageResponse,
     RunResponse,
@@ -187,6 +189,16 @@ class DaemonClient:
 
     def get_run(self, run_id: str) -> RunResponse:
         return RunResponse.model_validate(self.request("GET", f"/runs/{run_id}"))
+
+    def get_interactive_session(self, run_id: str) -> InteractiveSessionResponse:
+        return InteractiveSessionResponse.model_validate(
+            self.request("GET", f"/runs/{run_id}/interactive")
+        )
+
+    def get_interactive_url(self, run_id: str) -> InteractiveUrlResponse:
+        return InteractiveUrlResponse.model_validate(
+            self.request("GET", f"/runs/{run_id}/interactive/url")
+        )
 
     def get_run_events(
         self,

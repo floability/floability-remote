@@ -11,6 +11,8 @@ from ..validation import run_config_issues, validate_run_config
 from ..errors import OperationError
 from ..contracts import (
     ConfirmationModel,
+    InteractiveSessionResponse,
+    InteractiveUrlResponse,
     IndexedEventModel,
     IssueModel,
     RunEventPageResponse,
@@ -137,7 +139,7 @@ def start_plan(
     plan_id: str,
     client: ClientContext,
 ) -> RunResponse:
-    """Start one execute-mode run from a fresh, validated deployment plan."""
+    """Start one deployment from a fresh, validated execute or run plan."""
     connection = runtime.connections.snapshot()
     if (
         connection.state != ConnectionState.CONNECTED
@@ -155,10 +157,10 @@ def start_plan(
         )
     except RemoteRunError as error:
         raise OperationError("stale_plan", str(error), status=409) from error
-    if plan.config.mode != "execute":
+    if plan.config.mode not in ALLOWED_MODES:
         raise OperationError(
-            "execute_only",
-            "Interactive plans are not available yet. Validate an execute-mode plan.",
+            "unsupported_mode",
+            f"Mode {plan.config.mode} is not available for deployment.",
             status=400,
         )
     with runtime.audit.operation(
@@ -174,6 +176,85 @@ def start_plan(
             raise OperationError("conflict", str(error), status=409) from error
         audit.identifiers(plan_id=plan.id, run_id=run.id)
         return run_response(run)
+
+
+def _interactive_run(runtime: ApplicationRuntime, run_id: str) -> Run:
+    run = find_run(runtime, run_id)
+    if run.config.mode != "run":
+        raise OperationError(
+            "not_interactive",
+            f"Run {run_id} is an execute deployment, not an interactive session.",
+            status=409,
+        )
+    return run
+
+
+def interactive_session(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    client: ClientContext,
+) -> InteractiveSessionResponse:
+    """Return model-safe interactive and tunnel state without the Jupyter token."""
+    run = _interactive_run(runtime, run_id)
+    if run.state == "failed":
+        state = "failed"
+    elif run.finished:
+        state = "stopped"
+    elif run.cancel_requested:
+        state = "stopping"
+    elif run.jupyter_url:
+        state = "ready"
+    else:
+        state = "starting"
+
+    messages = {
+        "starting": "The interactive session is starting.",
+        "ready": "Jupyter is ready through the daemon-owned SSH tunnel.",
+        "stopping": "The interactive session is stopping and cleaning up.",
+        "stopped": run.message or "The interactive session has stopped.",
+        "failed": run.message or "The interactive session failed.",
+    }
+    with runtime.audit.operation(
+        "run.interactive_session",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        return InteractiveSessionResponse(
+            run_id=run.id,
+            state=state,
+            run_state=run.state,
+            tunnel_ready=bool(run.jupyter_url),
+            local_port=run.jupyter_local_port,
+            remote_port=run.jupyter_remote_port,
+            url_available=bool(run.jupyter_url),
+            message=messages[state],
+            cancel_requested=run.cancel_requested,
+        )
+
+
+def interactive_url(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    client: ClientContext,
+) -> InteractiveUrlResponse:
+    """Return the token-bearing URL only to a trusted local daemon client."""
+    run = _interactive_run(runtime, run_id)
+    with runtime.audit.operation(
+        "run.interactive_url",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        if not run.jupyter_url:
+            raise OperationError(
+                "interactive_not_ready",
+                "The interactive session does not currently have a working Jupyter URL.",
+                status=409,
+            )
+        return InteractiveUrlResponse(run_id=run.id, url=run.jupyter_url)
 
 
 def get(runtime: ApplicationRuntime, run_id: str, client=None) -> RunResponse:

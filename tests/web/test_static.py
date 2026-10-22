@@ -104,6 +104,15 @@ class FrontendBoundaryTests(unittest.TestCase):
         card = (STATIC / "js" / "taskvine.js").read_text()
         self.assertIn("if (!status.uses_taskvine) return;", card)
 
+    def test_jupyter_url_uses_trusted_authenticated_route(self):
+        api = (STATIC / "js" / "api.js").read_text()
+        main = (STATIC / "js" / "main.js").read_text()
+        panel = (STATIC / "js" / "run.js").read_text()
+        self.assertIn("interactiveUrl:", api)
+        self.assertIn("api.interactiveUrl(run.id)", main)
+        self.assertIn("showReady(url)", panel)
+        self.assertNotIn("event.data.url", panel)
+
     def test_completed_run_panel_has_download_area(self):
         html = (STATIC / "index.html").read_text()
         self.assertIn('id="run-files"', html)

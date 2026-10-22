@@ -15,8 +15,10 @@ from ..application.contracts import (
     ConnectionResponse,
     DeploymentPlanResponse,
     FloabilityOptionModel,
+    InteractiveSessionResponse,
     RunEventPageResponse,
     RunResponse,
+    TaskVineStatusResponse,
 )
 from ..domain.config import (
     DEFAULT_ENV_NAME,
@@ -126,8 +128,8 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     @tool_errors
     def validate_deployment(
         source_id: str,
-        mode: str,
-        batch_type: str,
+        mode: Literal["run", "execute"],
+        batch_type: Literal["local", "slurm", "condor", "uge"],
         entrypoint: str = "",
         env_name: str = DEFAULT_ENV_NAME,
         floability_version: str = "",
@@ -161,7 +163,7 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     @server.tool(annotations=STATE_CHANGE)
     @tool_errors
     def start_deployment(plan_id: str) -> RunResponse:
-        """Start an execute-mode deployment from a fresh validated plan ID."""
+        """Start an execute or interactive deployment from a validated plan ID."""
         return facade.start_deployment(plan_id)
 
     @server.tool(annotations=READ_ONLY)
@@ -206,6 +208,18 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     def cancel_run(run_id: str) -> RunResponse:
         """Cancel an active deployment through Floability's cleanup path."""
         return facade.cancel_run(run_id)
+
+    @server.tool(annotations=READ_ONLY)
+    @tool_errors
+    def get_interactive_session(run_id: str) -> InteractiveSessionResponse:
+        """Get Jupyter and tunnel readiness without exposing the Jupyter token."""
+        return facade.get_interactive_session(run_id)
+
+    @server.tool(annotations=REMOTE_READ_ONLY)
+    @tool_errors
+    def get_taskvine_status(run_id: str) -> TaskVineStatusResponse:
+        """Get TaskVine manager, worker, task, and factory status for a run."""
+        return facade.get_taskvine_status(run_id)
 
     return server
 

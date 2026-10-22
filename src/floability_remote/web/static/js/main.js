@@ -440,6 +440,11 @@ function follow(run, { restored = false } = {}) {
   stopFollowing = api.followRun(run.id, {
     onEvent: (event, position) => {
       runPanel.apply(event, position);
+      if (event.kind === "ready") {
+        api.interactiveUrl(run.id)
+          .then((result) => runPanel.showReady(result.url))
+          .catch((error) => handleError(error));
+      }
       updateStartControl();
     },
     onEnd: () => {

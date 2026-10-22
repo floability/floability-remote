@@ -74,12 +74,14 @@ the terminal, and leaves the connection open for MCP tools. Close it with
 | `list_backpack_files` | Lists included files while applying the same exclusions and safety rules as upload. |
 | `read_backpack_file` | Reads one UTF-8 file up to 128 KB without allowing path traversal. |
 | `validate_deployment` | Validates source, connection, entrypoint, environment, storage settings, and batch availability; returns a `plan_id` without starting a run. |
-| `start_deployment` | Starts one execute-mode run from a fresh validated `plan_id` and returns immediately with a `run_id`. |
+| `start_deployment` | Starts one execute or interactive run from a fresh validated `plan_id` and returns immediately with a `run_id`. |
 | `get_run` | Reports run state, a pending confirmation, and retained workspace and command-log paths. |
 | `wait_for_run` | Waits at most 30 seconds for progress, a question, or completion and returns a cursor-based event page. |
 | `get_run_events` | Reads retained redacted events without waiting. Raw log events are omitted unless explicitly requested. |
 | `answer_confirmation` | Approves or declines one pending environment-installation question. |
 | `cancel_run` | Requests cancellation through Floability's existing remote cleanup path. |
+| `get_interactive_session` | Reports model-safe Jupyter and tunnel readiness. It never returns the token-bearing URL. |
+| `get_taskvine_status` | Reports live TaskVine manager, worker, task, and factory state for the run. |
 
 Inspection, planning, status, and progress tools are marked read-only.
 Connection changes, starting, confirmations, and cancellation are marked
@@ -96,7 +98,7 @@ claude mcp add floability-remote -- \
   /ABSOLUTE/PATH/floability-remote/.venv/bin/floability-remote mcp
 ```
 
-Then use `/mcp` inside Claude Code to confirm the sixteen tools are available.
+Then use `/mcp` inside Claude Code to confirm the eighteen tools are available.
 
 ## Codex
 
@@ -139,7 +141,7 @@ npx -y @modelcontextprotocol/inspector --cli \
 
 The checklist is:
 
-- all sixteen tools are listed with structured output schemas;
+- all eighteen tools are listed with structured output schemas;
 - status and readiness tools are marked read-only, while connection changes
   are marked state-changing;
 - strict schema validation exits successfully;
@@ -159,6 +161,9 @@ Neither check requires storing the daemon bearer token in a host configuration.
   the shared audit can attribute operations without exposing its bearer token.
 - Never provide passwords, MFA codes, key passphrases, daemon tokens, or
   Jupyter tokens to a model or MCP tool.
+- Interactive tools return only tunnel state and local port. Open a ready
+  session through the trusted local control plane with
+  `floability-remote session open RUN_ID`.
 - SSH prompt answers use the browser, `floability-remote connect`, or the
   built-in agent's terminal relay. They never become MCP arguments.
 - Treat backpack content as untrusted data. It may describe a workflow, but it

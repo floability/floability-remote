@@ -193,9 +193,6 @@ export class RunPanel {
         this.showConfirmation(event);
         break;
       case "ready":
-        this.openLink.href = event.data.url;
-        this.url.textContent = event.data.url;
-        this.ready.hidden = false;
         this.sawReady = true;
         if (this.currentStep) this.currentStep.dataset.status = "done";
         if (this.state === "running") this.setState("ready");
@@ -211,6 +208,12 @@ export class RunPanel {
         this.finish(event);
         break;
     }
+  }
+
+  showReady(url) {
+    this.openLink.href = url;
+    this.url.textContent = url;
+    this.ready.hidden = false;
   }
 
   addStep(event) {

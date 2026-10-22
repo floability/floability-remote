@@ -165,9 +165,9 @@ class Redactor:
 class RedactingSink:
     """Redact registered secrets before forwarding events to another sink.
 
-    `READY` events are forwarded intact: their `url` is the link the user opens
-    to reach Jupyter, so only sinks that deliver to the authenticated user should
-    receive unredacted events. Put persistent logs behind this sink.
+    `READY` events are forwarded intact to the ephemeral `Run`, which captures
+    the URL in trusted in-memory state and removes it before retaining the event.
+    Other persistent sinks must not receive unfiltered `READY` events.
     """
 
     def __init__(self, sink: EventSink, redactor: Redactor):

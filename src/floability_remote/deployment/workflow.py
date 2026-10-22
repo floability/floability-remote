@@ -239,6 +239,7 @@ class RemoteWorkflow:
                 "Jupyter is ready.",
                 url=self.jupyter_url,
                 local_port=local_port,
+                remote_port=connection.remote_port,
             )
 
         status = self.remote_process.wait()
