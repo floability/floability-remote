@@ -33,6 +33,21 @@ your shell profile to make it permanent.
 
 Run the installer again to update to the latest version from the `main` branch.
 
+Install MCP or the built-in agent in the same isolated environment by selecting
+an extra during installation:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/floability/floability-remote/main/install.sh \
+  | env FLOABILITY_REMOTE_EXTRAS=mcp sh
+
+curl -fsSL https://raw.githubusercontent.com/floability/floability-remote/main/install.sh \
+  | env FLOABILITY_REMOTE_EXTRAS=agent sh
+```
+
+The `agent` extra includes MCP, OpenAI, and Anthropic support. Ollama itself is
+a separate local application. If `python3` is older than 3.10, add
+`FLOABILITY_REMOTE_PYTHON=python3.12` to the `env` command.
+
 ### Development installation
 
 To work on the source, clone the repository and install it in an editable
@@ -45,6 +60,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --editable .
+```
+
+Install the optional MCP adapter with Python 3.10 or newer:
+
+```bash
+python -m pip install --editable '.[mcp]'
+```
+
+Install the built-in agent and all supported model providers with:
+
+```bash
+python -m pip install --editable '.[agent]'
 ```
 
 ## Commands
@@ -162,6 +189,62 @@ An idle daemon stops after one hour only when it has no SSH connection or
 active run. `daemon stop` closes the connection cleanly; when a run is active,
 it refuses unless you explicitly use `daemon stop --yes`, which cancels the
 run and waits for remote cleanup.
+
+### MCP server (preview)
+
+Floability Remote can expose its daemon state to Claude Code, Codex, and other
+MCP hosts over stdio:
+
+```bash
+floability-remote daemon start --no-browser
+floability-remote mcp
+```
+
+The MCP tools can inspect status, request or close a daemon-owned SSH
+connection, and check the connected host's Floability and batch-system
+readiness. The MCP process does not own SSH or deployment state; it calls the
+authenticated local daemon, which records requests with an `mcp` client
+identity. Passwords, MFA answers, key passphrases, bearer tokens, and Jupyter
+tokens must never be passed through MCP.
+
+External MCP hosts can reuse a passwordless connection requested by a tool. If
+the host needs a password, MFA response, key passphrase, or new-host
+confirmation, establish it in a separate terminal so the answer never enters
+the model conversation:
+
+```bash
+floability-remote connect <USER@LOGIN_NODE>
+```
+
+See [docs/mcp.md](docs/mcp.md) for installation and host configuration.
+
+### Built-in agent (preview)
+
+The terminal agent uses the same MCP server and tools as external hosts. It
+starts or reuses the headless daemon and defaults to a local Ollama model:
+
+```bash
+ollama pull qwen3
+floability-remote agent
+```
+
+Use another local model, a hosted provider, or a single noninteractive prompt:
+
+```bash
+floability-remote agent --model llama3.1:8b
+floability-remote agent --model openai:gpt-5
+floability-remote agent --model anthropic:your-model-name
+floability-remote agent --prompt "Check Floability Remote status."
+```
+
+Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` before selecting the corresponding
+hosted provider. The agent asks for terminal approval before connecting or
+disconnecting. OpenSSH authentication questions are then relayed through
+hidden terminal input directly to the daemon, outside MCP and model history.
+Use `--yes` only when you deliberately want to preapprove state-changing tool
+calls; it never supplies or bypasses SSH credentials.
+
+See [docs/agent.md](docs/agent.md) for model configuration and current scope.
 
 From the browser you can:
 
@@ -420,14 +503,17 @@ src/
     ├── application/        operations, contracts, runtime, validation, and audit
     ├── cli/                terminal parsing, commands, prompts, and rendering
     ├── daemon/             loopback API, lifecycle, discovery, and security
+    ├── mcp/                optional stdio tools over the daemon client
+    ├── agent/              PydanticAI chat, models, prompts, and approval policy
     └── web/                browser assets and compatibility imports
 ```
 
 The CLI and daemon API are adapters around the same application operations.
-The browser calls the daemon API. Deployment logic lives in the application
-and lower-level packages, never in argument parsing, API routes, or JavaScript.
-The daemon writes a private discovery record for future local clients and a
-size-bounded, secret-redacted operation audit under the user's state directory.
+The browser calls the daemon API, and the MCP server calls its typed client.
+Deployment logic lives in the application and lower-level packages, never in
+argument parsing, API routes, MCP registrations, or JavaScript. The daemon
+writes a private discovery record for local clients and a size-bounded,
+secret-redacted operation audit under the user's state directory.
 
 ## Tests
 

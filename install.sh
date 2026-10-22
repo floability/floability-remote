@@ -11,6 +11,7 @@ INSTALL_ROOT="${FLOABILITY_REMOTE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/$PR
 VENV_DIR="$INSTALL_ROOT/venv"
 BIN_DIR="${FLOABILITY_REMOTE_BIN_DIR:-$HOME/.local/bin}"
 SOURCE="${FLOABILITY_REMOTE_SOURCE:-https://github.com/floability/floability-remote/archive/refs/heads/main.tar.gz}"
+EXTRAS="${FLOABILITY_REMOTE_EXTRAS:-}"
 
 say() {
     printf '%s\n' "$*"
@@ -42,6 +43,18 @@ if ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) 
     fail "Python 3.9 or newer is required; found $($PYTHON --version 2>&1)."
 fi
 
+case "$EXTRAS" in
+    ""|mcp|agent|all)
+        ;;
+    *)
+        fail "FLOABILITY_REMOTE_EXTRAS must be mcp, agent, all, or empty."
+        ;;
+esac
+
+if [ -n "$EXTRAS" ] && ! "$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+    fail "The $EXTRAS extra requires Python 3.10 or newer; found $($PYTHON --version 2>&1)."
+fi
+
 say "Installing $PROJECT_NAME with $($PYTHON --version 2>&1)"
 mkdir -p "$INSTALL_ROOT" "$BIN_DIR"
 
@@ -50,6 +63,10 @@ if [ ! -x "$VENV_DIR/bin/python" ]; then
     if ! "$PYTHON" -m venv "$VENV_DIR"; then
         fail "Python's venv module is unavailable. Install it (for example, python3-venv on Ubuntu) and try again."
     fi
+fi
+
+if [ -n "$EXTRAS" ] && ! "$VENV_DIR/bin/python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+    fail "The existing environment at $VENV_DIR uses $($VENV_DIR/bin/python --version 2>&1). Recreate it with Python 3.10 or newer, or select a new FLOABILITY_REMOTE_HOME."
 fi
 
 say "Downloading and installing the latest $PROJECT_NAME"
@@ -61,6 +78,25 @@ say "Downloading and installing the latest $PROJECT_NAME"
     --disable-pip-version-check \
     --quiet \
     --upgrade "$SOURCE"
+
+case "$EXTRAS" in
+    mcp)
+        say "Installing MCP support"
+        "$VENV_DIR/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --quiet \
+            --upgrade 'mcp>=2,<3'
+        ;;
+    agent|all)
+        say "Installing MCP and agent support"
+        "$VENV_DIR/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --quiet \
+            --upgrade \
+            'mcp>=2,<3' \
+            'pydantic-ai-slim[anthropic,mcp,openai]>=2,<3'
+        ;;
+esac
 
 ln -sf "$VENV_DIR/bin/$PROJECT_NAME" "$BIN_DIR/$PROJECT_NAME"
 

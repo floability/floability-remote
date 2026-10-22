@@ -1,11 +1,14 @@
 """Thin terminal command adapters over shared application operations."""
 
 import argparse
+import getpass
 import shlex
 import sys
+import time
 from pathlib import Path
 
 from ..application.errors import OperationError
+from ..application.contracts import ConnectRequest
 from ..application.audit import AuditRecorder
 from ..application.operations.backpacks import clone_repository
 from ..application.operations.clusters import check_with_session
@@ -14,7 +17,12 @@ from ..application.operations.results import (
     list_files_with_session,
     taskvine_with_session,
 )
-from ..domain.config import ConfigError, ConnectionConfig, EnvironmentConfig, validate_connection
+from ..domain.config import (
+    ConfigError,
+    ConnectionConfig,
+    EnvironmentConfig,
+    validate_connection,
+)
 from ..domain.errors import RemoteRunError
 from ..services.files import format_size, select_file
 from ..remote.ssh import SSHSession
@@ -47,7 +55,11 @@ def _session(connection: ConnectionConfig) -> SSHSession:
 
 
 def _check_run_dir(run_dir: str) -> None:
-    if not run_dir.strip() or run_dir.startswith("-") or any(ord(c) < 32 for c in run_dir):
+    if (
+        not run_dir.strip()
+        or run_dir.startswith("-")
+        or any(ord(c) < 32 for c in run_dir)
+    ):
         raise RemoteRunError("--run-dir must be a non-empty remote path.")
 
 
@@ -94,6 +106,124 @@ def run_daemon(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_connect(args: argparse.Namespace) -> int:
+    """Open one daemon-owned SSH session and relay secrets only in this terminal."""
+    from ..daemon.client import DaemonClient
+    from ..daemon.lifecycle import start
+
+    descriptor = start(open_browser=False)
+    client = DaemonClient(descriptor, client="cli-connect")
+    connection = client.get_connection()
+
+    if connection.state == "connected":
+        if connection.target != args.target:
+            raise OperationError(
+                "connection_conflict",
+                f"Already connected to {connection.target}; disconnect first.",
+                status=409,
+            )
+        print(f"Already connected to {connection.target}.")
+        return 0
+    if connection.state == "connecting" and connection.target != args.target:
+        raise OperationError(
+            "connection_conflict",
+            f"Already connecting to {connection.target}; disconnect first.",
+            status=409,
+        )
+    if connection.state == "failed":
+        client.disconnect()
+        connection = client.get_connection()
+    if connection.state == "disconnected":
+        connection = client.connect(
+            ConnectRequest(target=args.target, identity_file=args.identity_file)
+        )
+
+    print(f"Connecting to {args.target}...")
+    deadline = time.monotonic() + 310
+    handled_prompt = ""
+    while connection.state == "connecting":
+        prompt = connection.prompt
+        if prompt is not None and prompt.id != handled_prompt:
+            handled_prompt = prompt.id
+            try:
+                if prompt.kind == "confirm":
+                    answer = input(f"[ssh] {prompt.message} ").strip()
+                else:
+                    answer = getpass.getpass(f"[ssh] {prompt.message} ")
+            except (EOFError, KeyboardInterrupt):
+                client.answer_prompt(prompt.id, None)
+                raise OperationError(
+                    "authentication_cancelled", "SSH authentication was cancelled."
+                )
+            client.answer_prompt(prompt.id, answer)
+        if time.monotonic() >= deadline:
+            client.disconnect()
+            raise OperationError(
+                "connection_timeout",
+                "SSH connection did not finish within five minutes.",
+            )
+        time.sleep(0.1)
+        connection = client.get_connection()
+
+    if connection.state != "connected":
+        raise OperationError(
+            "connection_failed", connection.error or "SSH connection failed."
+        )
+    identity = "@".join(
+        item for item in (connection.remote_user, connection.remote_host) if item
+    )
+    print(f"Connected to {identity or connection.target}.")
+    print("The daemon will reuse this SSH connection for later tools.")
+    return 0
+
+
+def run_disconnect(args: argparse.Namespace) -> int:
+    from ..daemon.client import DaemonClient
+
+    del args
+    connection = DaemonClient.discover(client="cli-connect").disconnect()
+    print(f"Connection state: {connection.state}")
+    return 0
+
+
+def run_mcp(args: argparse.Namespace) -> int:
+    """Run the optional stdio MCP adapter without polluting protocol stdout."""
+    try:
+        from ..mcp.server import run
+    except ImportError as error:
+        if error.name and (error.name == "mcp" or error.name.startswith("mcp.")):
+            raise RemoteRunError(
+                "The MCP dependencies are not installed. "
+                "Install them with `pip install 'floability-remote[mcp]'`."
+            ) from error
+        raise
+    run()
+    return 0
+
+
+def run_agent(args: argparse.Namespace) -> int:
+    """Run the optional PydanticAI terminal client."""
+    try:
+        from ..agent.main import run
+
+        return run(args)
+    except ImportError as error:
+        optional_roots = {
+            "pydantic_ai",
+            "fastmcp",
+            "mcp",
+            "openai",
+            "anthropic",
+        }
+        root = (error.name or "").split(".", 1)[0]
+        if root in optional_roots:
+            raise RemoteRunError(
+                "The agent dependencies are not installed. "
+                "Install them with `pip install 'floability-remote[agent]'`."
+            ) from error
+        raise
+
+
 def run_download(args: argparse.Namespace) -> int:
     _check_run_dir(args.run_dir)
     connection = _connection(args)
@@ -108,7 +238,11 @@ def run_download(args: argparse.Namespace) -> int:
         selectable = print_inventory(inventory)
         if args.list_only:
             return 0
-        item = select_file(inventory, args.file) if args.file else select_file_interactively(selectable)
+        item = (
+            select_file(inventory, args.file)
+            if args.file
+            else select_file_interactively(selectable)
+        )
         destination = _download_destination(args.output, item.filename)
         # Keep the compatibility service instance above while routing through
         # the shared operation used by future interfaces.
@@ -157,7 +291,9 @@ def run_cluster_check(args: argparse.Namespace) -> int:
         print(f"Environment: {label}")
         print(f"Base directory: {report.resolved_base_dir}")
         if report.total_bytes is not None and report.free_bytes is not None:
-            print(f"Free space: {format_size(report.free_bytes)} of {format_size(report.total_bytes)}")
+            print(
+                f"Free space: {format_size(report.free_bytes)} of {format_size(report.total_bytes)}"
+            )
         else:
             print("Free space: Not reported")
         if report.quota_status == "reported":
@@ -185,6 +321,14 @@ def _dispatch(args: argparse.Namespace) -> int:
         return run_web(args)
     if args.command == "daemon":
         return run_daemon(args)
+    if args.command == "connect":
+        return run_connect(args)
+    if args.command == "disconnect":
+        return run_disconnect(args)
+    if args.command == "mcp":
+        return run_mcp(args)
+    if args.command == "agent":
+        return run_agent(args)
     if args.command == "download":
         return run_download(args)
     if args.command == "check-cluster":

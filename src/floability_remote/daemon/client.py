@@ -1,4 +1,4 @@
-"""Small authenticated client shared by future MCP and agent adapters."""
+"""Small authenticated client shared by MCP and future agent adapters."""
 
 import json
 import secrets
@@ -33,14 +33,25 @@ class DaemonClient:
         self.session_id = session_id or secrets.token_hex(8)
 
     @classmethod
-    def discover(cls, client: str = "internal", store: Optional[SessionStore] = None):
+    def discover(
+        cls,
+        client: str = "internal",
+        session_id: str = "",
+        store: Optional[SessionStore] = None,
+    ):
         descriptor = (store or SessionStore()).read()
         if descriptor is None:
-            raise OperationError("daemon_not_running", "Floability Remote daemon is not running.")
-        return cls(descriptor, client=client)
+            raise OperationError(
+                "daemon_not_running", "Floability Remote daemon is not running."
+            )
+        return cls(descriptor, client=client, session_id=session_id)
 
     def request(
-        self, method: str, path: str, payload: Optional[Dict[str, Any]] = None, timeout: float = 5
+        self,
+        method: str,
+        path: str,
+        payload: Optional[Dict[str, Any]] = None,
+        timeout: float = 5,
     ) -> Dict[str, Any]:
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         request = Request(
@@ -69,7 +80,9 @@ class DaemonClient:
                 issues=detail.get("issues", []),
             ) from error
         except (URLError, TimeoutError, OSError) as error:
-            raise OperationError("daemon_unreachable", f"Cannot reach Floability Remote daemon: {error}") from error
+            raise OperationError(
+                "daemon_unreachable", f"Cannot reach Floability Remote daemon: {error}"
+            ) from error
         return json.loads(body) if body else {}
 
     def health(self) -> Dict[str, Any]:
@@ -95,7 +108,9 @@ class DaemonClient:
 
     def check_cluster(self, request: ClusterCheckRequest) -> ClusterCheckResponse:
         return ClusterCheckResponse.model_validate(
-            self.request("POST", "/cluster/check", request.model_dump(mode="json"))
+            self.request(
+                "POST", "/cluster/check", request.model_dump(mode="json"), timeout=30
+            )
         )
 
     def validate_run(self, request: RunRequest) -> ValidationResponse:

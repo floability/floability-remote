@@ -62,7 +62,9 @@ def build_parser() -> argparse.ArgumentParser:
         "daemon", help="Manage the local Floability Remote daemon."
     )
     daemon_commands = daemon_parser.add_subparsers(dest="daemon_command", required=True)
-    daemon_start = daemon_commands.add_parser("start", help="Start the daemon in the background.")
+    daemon_start = daemon_commands.add_parser(
+        "start", help="Start the daemon in the background."
+    )
     daemon_start.add_argument("--port", type=port_number, default=None)
     daemon_start.add_argument("--no-browser", action="store_true")
     daemon_start.add_argument(
@@ -77,6 +79,47 @@ def build_parser() -> argparse.ArgumentParser:
         "--yes",
         action="store_true",
         help="Allow an active run to be cancelled and cleaned up.",
+    )
+
+    connect_parser = commands.add_parser(
+        "connect", help="Open a reusable daemon-owned SSH connection."
+    )
+    connect_parser.add_argument("target", help="SSH host or user@host.")
+    connect_parser.add_argument("--identity-file")
+
+    commands.add_parser(
+        "disconnect", help="Close the reusable daemon-owned SSH connection."
+    )
+
+    commands.add_parser(
+        "mcp", help="Run the Floability Remote MCP server over standard input/output."
+    )
+
+    agent_parser = commands.add_parser(
+        "agent", help="Chat with Floability Remote through the same MCP tools."
+    )
+    agent_parser.add_argument(
+        "--model",
+        default="ollama:qwen3",
+        help=(
+            "Model selection: ollama:<MODEL>, openai:<MODEL>, or "
+            "anthropic:<MODEL> (default: ollama:qwen3)."
+        ),
+    )
+    agent_parser.add_argument(
+        "--ollama-base-url",
+        default=None,
+        help="Ollama OpenAI-compatible endpoint (default: OLLAMA_BASE_URL or localhost).",
+    )
+    agent_parser.add_argument(
+        "--prompt",
+        default="",
+        help="Run one request and exit instead of opening interactive chat.",
+    )
+    agent_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Preapprove future state-changing MCP tool calls.",
     )
 
     download_parser = commands.add_parser(
@@ -156,7 +199,9 @@ def port_number(raw: str) -> int:
 
 def config_from_args(args: argparse.Namespace) -> RunConfig:
     backpack_path = Path(args.backpack).expanduser()
-    path_hint = args.backpack.startswith((".", "~", "/")) or args.backpack.lower().endswith(".zip")
+    path_hint = args.backpack.startswith(
+        (".", "~", "/")
+    ) or args.backpack.lower().endswith(".zip")
     if backpack_path.exists() or path_hint:
         source_type = "folder" if backpack_path.is_dir() else "zip"
         source = BackpackSource(

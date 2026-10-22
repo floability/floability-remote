@@ -3,6 +3,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from floability_remote.cli import build_parser, validate_args
 from floability_remote.domain.errors import RemoteRunError
@@ -101,12 +102,56 @@ class ParserTests(unittest.TestCase):
 
     def test_clone_arguments(self):
         args = build_parser().parse_args(
-            ["clone", "https://github.com/example/backpack.git", "--ref", "v1", "--into", "./copy"]
+            [
+                "clone",
+                "https://github.com/example/backpack.git",
+                "--ref",
+                "v1",
+                "--into",
+                "./copy",
+            ]
         )
         self.assertEqual(args.command, "clone")
         self.assertEqual(args.repository, "https://github.com/example/backpack.git")
         self.assertEqual(args.ref, "v1")
         self.assertEqual(args.into, "./copy")
+
+    def test_mcp_command_has_no_protocol_polluting_options(self):
+        args = build_parser().parse_args(["mcp"])
+        self.assertEqual(vars(args), {"command": "mcp"})
+
+    def test_agent_defaults_to_local_ollama(self):
+        args = build_parser().parse_args(["agent"])
+        self.assertEqual(args.model, "ollama:qwen3")
+        self.assertIsNone(args.ollama_base_url)
+        self.assertEqual(args.prompt, "")
+        self.assertFalse(args.yes)
+
+    def test_agent_accepts_hosted_model_and_one_shot_prompt(self):
+        args = build_parser().parse_args(
+            ["agent", "--model", "openai:gpt-5", "--prompt", "Check status."]
+        )
+        self.assertEqual(args.model, "openai:gpt-5")
+        self.assertEqual(args.prompt, "Check status.")
+
+    def test_connect_and_disconnect_commands(self):
+        connect = build_parser().parse_args(
+            ["connect", "user@login.example.org", "--identity-file", "/tmp/key"]
+        )
+        self.assertEqual(connect.target, "user@login.example.org")
+        self.assertEqual(connect.identity_file, "/tmp/key")
+
+        disconnect = build_parser().parse_args(["disconnect"])
+        self.assertEqual(vars(disconnect), {"command": "disconnect"})
+
+    def test_agent_missing_optional_dependency_has_install_hint(self):
+        from floability_remote.cli.commands import run_agent
+
+        error = ModuleNotFoundError("No module named 'pydantic_ai'")
+        error.name = "pydantic_ai"
+        with patch("floability_remote.agent.main.run", side_effect=error):
+            with self.assertRaisesRegex(RemoteRunError, r"floability-remote\[agent\]"):
+                run_agent(build_parser().parse_args(["agent"]))
 
     def test_local_backpack_folder_is_detected(self):
         with tempfile.TemporaryDirectory() as temporary:
