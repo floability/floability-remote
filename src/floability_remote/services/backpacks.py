@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import stat
@@ -33,6 +34,7 @@ SOURCE_RECORD = ".floability-remote-source.json"
 DEFAULT_LOCAL_ROOT = "~/floability-backpacks"
 MAX_WORKFLOW_FILES = 200
 MAX_LISTED_DIRECTORIES = 500
+MAX_READ_BYTES = 128 * 1024
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,12 @@ class DirectoryListing:
     truncated: bool
 
 
+@dataclass(frozen=True)
+class BackpackFile:
+    path: str
+    size: int
+
+
 def _skipped(parts: Iterable[str]) -> bool:
     return any(part in SKIPPED_NAMES for part in parts)
 
@@ -115,8 +123,8 @@ def _directory_entries(root: Path) -> Iterator[Tuple[Path, PurePosixPath, int]]:
             if candidate.is_symlink():
                 raise RemoteRunError(f"Symlinks are not allowed: {relative}")
             kept_directories.append(name)
-        directories[:] = kept_directories
-        for name in files:
+        directories[:] = sorted(kept_directories)
+        for name in sorted(files):
             candidate = current_path / name
             relative = candidate.relative_to(root)
             if _skipped(relative.parts):
@@ -181,7 +189,9 @@ def _inspection(path: Path) -> BackpackInspection:
             raise RemoteRunError(f"Symlinks are not allowed: {path}")
         if path.is_dir():
             workflow_found = (path / "workflow").is_dir()
-            entries = ((relative, size) for _, relative, size in _directory_entries(path))
+            entries = (
+                (relative, size) for _, relative, size in _directory_entries(path)
+            )
         elif path.is_file() and path.suffix.lower() == ".zip":
             archive = zipfile.ZipFile(path)
             wrapper = _zip_root(archive.infolist())
@@ -220,7 +230,11 @@ def _inspection(path: Path) -> BackpackInspection:
                     problems.append("Backpack is larger than 200 MB.")
                     break
         finally:
-            if path.is_file() and path.suffix.lower() == ".zip" and "archive" in locals():
+            if (
+                path.is_file()
+                and path.suffix.lower() == ".zip"
+                and "archive" in locals()
+            ):
                 archive.close()
     except (OSError, zipfile.BadZipFile, RemoteRunError) as error:
         problems.append(str(error))
@@ -242,6 +256,88 @@ def _inspection(path: Path) -> BackpackInspection:
 def inspect(path: Union[str, Path]) -> BackpackInspection:
     """Return a local backpack summary and every problem found."""
     return _inspection(Path(path).expanduser().resolve())
+
+
+def list_files(path: Union[str, Path]) -> Tuple[BackpackFile, ...]:
+    """List every included regular file using backpack-relative POSIX paths."""
+    resolved, report = _require_valid(path)
+    if report.source_type == "folder":
+        entries = (
+            BackpackFile(relative.as_posix(), size)
+            for _, relative, size in _directory_entries(resolved)
+        )
+        return tuple(entries)
+    with zipfile.ZipFile(resolved) as archive:
+        return tuple(
+            BackpackFile(relative.as_posix(), size)
+            for _, relative, size in _zip_entries(archive)
+        )
+
+
+def read_text(path: Union[str, Path], relative_path: str) -> str:
+    """Read one small UTF-8 backpack file after applying archive safety rules."""
+    requested = _safe_archive_path(relative_path)
+    if requested is None or requested.as_posix() != relative_path.replace("\\", "/"):
+        raise RemoteRunError("File path must be relative and cannot contain '..'.")
+    resolved, report = _require_valid(path)
+
+    if report.source_type == "folder":
+        for source, relative, size in _directory_entries(resolved):
+            if relative != requested:
+                continue
+            if size > MAX_READ_BYTES:
+                raise RemoteRunError("File is larger than the 128 KB preview limit.")
+            data = source.read_bytes()
+            break
+        else:
+            raise RemoteRunError(f"Backpack file was not found: {relative_path}")
+    else:
+        with zipfile.ZipFile(resolved) as archive:
+            for info, relative, size in _zip_entries(archive):
+                if relative != requested:
+                    continue
+                if size > MAX_READ_BYTES:
+                    raise RemoteRunError(
+                        "File is larger than the 128 KB preview limit."
+                    )
+                data = archive.read(info)
+                break
+            else:
+                raise RemoteRunError(f"Backpack file was not found: {relative_path}")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise RemoteRunError(
+            "File is not UTF-8 text and cannot be previewed."
+        ) from error
+
+
+def fingerprint(path: Union[str, Path]) -> str:
+    """Hash all included paths and contents to detect changes after inspection."""
+    resolved, report = _require_valid(path)
+    digest = hashlib.sha256()
+
+    def update(relative: PurePosixPath, size: int, stream: BinaryIO) -> None:
+        digest.update(relative.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(size).encode("ascii"))
+        digest.update(b"\0")
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+
+    if report.source_type == "folder":
+        for source, relative, size in _directory_entries(resolved):
+            with source.open("rb") as stream:
+                update(relative, size, stream)
+    else:
+        with zipfile.ZipFile(resolved) as archive:
+            for info, relative, size in _zip_entries(archive):
+                with archive.open(info) as stream:
+                    update(relative, size, stream)
+    return digest.hexdigest()
 
 
 def _require_valid(path: Union[str, Path]) -> Tuple[Path, BackpackInspection]:
@@ -269,7 +365,9 @@ def pack(path: Union[str, Path]) -> BinaryIO:
                 for info, relative, _ in _zip_entries(zipped):
                     tar_info = tarfile.TarInfo(relative.as_posix())
                     tar_info.size = info.file_size
-                    tar_info.mode = 0o755 if (info.external_attr >> 16) & 0o111 else 0o644
+                    tar_info.mode = (
+                        0o755 if (info.external_attr >> 16) & 0o111 else 0o644
+                    )
                     with zipped.open(info) as source:
                         archive.addfile(tar_info, source)
     stream.seek(0)
@@ -307,13 +405,17 @@ def provenance(path: Union[str, Path]) -> BackpackProvenance:
     if (resolved / ".git").exists():
         commit_result = subprocess.run(
             ["git", "-C", str(resolved), "rev-parse", "HEAD"],
-            text=True, capture_output=True, check=False,
+            text=True,
+            capture_output=True,
+            check=False,
         )
         if commit_result.returncode == 0:
             commit = commit_result.stdout.strip()
         status_result = subprocess.run(
             ["git", "-C", str(resolved), "status", "--porcelain"],
-            text=True, capture_output=True, check=False,
+            text=True,
+            capture_output=True,
+            check=False,
         )
         if status_result.returncode == 0:
             edits = len([line for line in status_result.stdout.splitlines() if line])
@@ -341,7 +443,9 @@ def _repository_name(repository: str) -> str:
     if name.endswith(".git"):
         name = name[:-4]
     if not name or name in (".", ".."):
-        raise RemoteRunError("Could not determine a folder name from the repository URL.")
+        raise RemoteRunError(
+            "Could not determine a folder name from the repository URL."
+        )
     return name
 
 
@@ -362,7 +466,9 @@ def _extract_into(source: Path, destination: Path) -> None:
                 output.parent.mkdir(parents=True, exist_ok=True)
                 data = archive.extractfile(member)
                 if data is None:
-                    raise RemoteRunError(f"Could not read {member.name} from the archive.")
+                    raise RemoteRunError(
+                        f"Could not read {member.name} from the archive."
+                    )
                 with data, output.open("xb") as target:
                     shutil.copyfileobj(data, target)
                 if member.mode & 0o111:
@@ -373,7 +479,9 @@ def _github_archive(repository: str, ref: str, destination: Path) -> None:
     parsed = urllib.parse.urlparse(repository)
     parts = parsed.path.strip("/").removesuffix(".git").split("/")
     if parsed.hostname not in {"github.com", "www.github.com"} or len(parts) != 2:
-        raise RemoteRunError("Git is unavailable; ZIP fallback supports public GitHub repositories only.")
+        raise RemoteRunError(
+            "Git is unavailable; ZIP fallback supports public GitHub repositories only."
+        )
     refs = [ref] if ref else ["main", "master"]
     last_error: Optional[Exception] = None
     for candidate_ref in refs:
@@ -397,12 +505,16 @@ def clone(
     repository: str, ref: str = "", destination: Union[str, Path] = ""
 ) -> CloneResult:
     """Clone/download a repository locally and record its origin."""
-    if not repository.strip() or repository.startswith("-") or any(
-        ord(character) < 32 for character in repository
+    if (
+        not repository.strip()
+        or repository.startswith("-")
+        or any(ord(character) < 32 for character in repository)
     ):
         raise RemoteRunError("Repository is not a valid Git repository URL.")
     if ref.startswith("-") or any(ord(character) < 32 for character in ref):
-        raise RemoteRunError("Git ref cannot begin with '-' or contain control characters.")
+        raise RemoteRunError(
+            "Git ref cannot begin with '-' or contain control characters."
+        )
     name = _repository_name(repository)
     if destination:
         target = Path(destination).expanduser().resolve()
@@ -419,24 +531,33 @@ def clone(
         if git:
             result = subprocess.run(
                 [git, "clone", "--", repository, str(target)],
-                text=True, capture_output=True, check=False,
+                text=True,
+                capture_output=True,
+                check=False,
             )
             if result.returncode != 0:
                 raise RemoteRunError(result.stderr.strip() or "Local git clone failed.")
             if ref:
                 result = subprocess.run(
                     [git, "-C", str(target), "checkout", "--detach", ref],
-                    text=True, capture_output=True, check=False,
+                    text=True,
+                    capture_output=True,
+                    check=False,
                 )
                 if result.returncode != 0:
-                    raise RemoteRunError(result.stderr.strip() or f"Could not check out {ref}.")
+                    raise RemoteRunError(
+                        result.stderr.strip() or f"Could not check out {ref}."
+                    )
         else:
             target.mkdir()
             _github_archive(repository, ref, target)
         _write_source_record(target, repository, ref)
         report = inspect(target)
         if not report.valid:
-            raise RemoteRunError("Cloned repository is not a valid backpack: " + " ".join(report.problems))
+            raise RemoteRunError(
+                "Cloned repository is not a valid backpack: "
+                + " ".join(report.problems)
+            )
         return CloneResult(str(target), provenance(target))
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
@@ -478,7 +599,9 @@ def list_directories(path: Union[str, Path] = "") -> DirectoryListing:
         if len(entries) >= MAX_LISTED_DIRECTORIES:
             truncated = True
             break
-        entries.append(DirectoryEntry(child.name, str(child), _looks_like_backpack(child)))
+        entries.append(
+            DirectoryEntry(child.name, str(child), _looks_like_backpack(child))
+        )
     return DirectoryListing(
         path=str(current),
         parent=str(current.parent) if current.parent != current else None,
@@ -494,8 +617,21 @@ def discard_changes(path: Union[str, Path]) -> BackpackProvenance:
     if not (resolved / ".git").exists():
         raise RemoteRunError("This local backpack is not a Git clone.")
     result = subprocess.run(
-        ["git", "-C", str(resolved), "restore", "--source", "HEAD", "--staged", "--worktree", "--", "."],
-        text=True, capture_output=True, check=False,
+        [
+            "git",
+            "-C",
+            str(resolved),
+            "restore",
+            "--source",
+            "HEAD",
+            "--staged",
+            "--worktree",
+            "--",
+            ".",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RemoteRunError(result.stderr.strip() or "Could not discard changes.")

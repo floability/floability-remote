@@ -187,6 +187,23 @@ open SSH connection, and writes local-source provenance to the remote
 `source.json` run record. That record is included in the run's downloadable
 files.
 
+### Agent source snapshots and deployment plans
+
+The MCP and built-in agent use daemon-scoped source snapshots and plans. These
+routes are authenticated loopback APIs; they do not start a run.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/v1/backpacks/sources/inspect` | Inspect a Git, folder, or ZIP source and return a `source_id`, fingerprinted summary, and entrypoint candidates. Git sources are cloned into private daemon storage and pinned to the resolved commit. |
+| `POST /api/v1/backpacks/sources/check` | Check whether `source_id` is still unchanged. |
+| `POST /api/v1/backpacks/sources/files` | List files included by the backpack safety rules. |
+| `POST /api/v1/backpacks/sources/read` | Read one named UTF-8 file, limited to 128 KB. |
+| `POST /api/v1/plans/validate` | Combine `source_id` with run settings and the open SSH connection, verify the entrypoint and detected batch system, and return a `plan_id` only when valid. |
+
+Plans are bound to the source fingerprint and the current connection's start
+time. Reconnecting or modifying a local source makes the plan stale. Source
+snapshots and plans are removed when the daemon exits.
+
 ### Connection
 
 The local daemon keeps at most one authenticated SSH connection

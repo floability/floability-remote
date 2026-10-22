@@ -1,8 +1,16 @@
 import unittest
+from unittest import mock
 
 from floability_remote.application.contracts import (
+    BackpackFileListResponse,
+    BackpackFileModel,
+    BackpackFileResponse,
+    BackpackInspectionResponse,
+    BackpackSourceCheckResponse,
+    BackpackSourceResponse,
     ClusterCheckResponse,
     ConnectionResponse,
+    DeploymentPlanResponse,
 )
 from floability_remote.application.errors import OperationError
 from floability_remote.mcp.tools import MCPTools
@@ -135,6 +143,70 @@ class MCPToolsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(OperationError, "Connect to a remote host"):
             tools.check_remote()
+
+    def test_phase3_tools_share_source_and_plan_identifiers(self):
+        client = mock.Mock()
+        client.inspect_backpack_source.return_value = BackpackSourceResponse(
+            source_id="source-1",
+            source_type="git",
+            location="https://github.com/example/demo.git",
+            commit="abc123",
+            resolved_ref="abc123",
+            inspection=BackpackInspectionResponse(
+                path="/tmp/demo",
+                name="demo",
+                source_type="folder",
+                file_count=2,
+                total_bytes=20,
+                workflow_found=True,
+                valid=True,
+                problems=[],
+                workflow_files=["main.py"],
+            ),
+            entrypoints=["main.py"],
+            created_at=1.0,
+        )
+        client.check_backpack_source.return_value = BackpackSourceCheckResponse(
+            source_id="source-1", fresh=True, message="unchanged"
+        )
+        client.list_backpack_files.return_value = BackpackFileListResponse(
+            source_id="source-1",
+            files=[BackpackFileModel(path="workflow/main.py", size=10)],
+        )
+        client.read_backpack_file.return_value = BackpackFileResponse(
+            source_id="source-1", path="workflow/main.py", content="print('ok')"
+        )
+        client.validate_deployment_plan.return_value = DeploymentPlanResponse(
+            valid=True,
+            plan_id="plan-1",
+            source_id="source-1",
+            target="user@login.example.edu",
+            mode="execute",
+            batch_type="local",
+            entrypoint="main.py",
+            command="floability-remote execute ...",
+            created_at=2.0,
+        )
+        tools = MCPTools(client_factory=lambda kind, session: client)
+
+        source = tools.inspect_backpack(
+            repository="https://github.com/example/demo.git"
+        )
+        self.assertEqual(source.source_id, "source-1")
+        self.assertTrue(tools.check_backpack_source(source.source_id).fresh)
+        self.assertEqual(
+            tools.list_backpack_files(source.source_id).files[0].path,
+            "workflow/main.py",
+        )
+        self.assertIn(
+            "print",
+            tools.read_backpack_file(source.source_id, "workflow/main.py").content,
+        )
+        plan = tools.validate_deployment(source.source_id, "execute", "local")
+        self.assertEqual(plan.plan_id, "plan-1")
+        request = client.validate_deployment_plan.call_args.args[0]
+        self.assertEqual(request.source_id, "source-1")
+        self.assertEqual(request.environment.env_name, "floability-remote-managed")
 
 
 if __name__ == "__main__":

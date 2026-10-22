@@ -66,3 +66,53 @@ class BackpackCloneResponse(BaseModel):
 class BackpackOpenRequest(StrictModel):
     path: str
     editor: str = "folder"
+
+
+class BackpackSourceRequest(StrictModel):
+    source_type: str = "git"
+    repository: str = ""
+    ref: str = ""
+    local_path: str = ""
+
+
+class BackpackSourceResponse(BaseModel):
+    source_id: str
+    source_type: str
+    location: str
+    requested_ref: str = ""
+    resolved_ref: str = ""
+    commit: str = ""
+    inspection: BackpackInspectionResponse
+    entrypoints: List[str] = Field(default_factory=list)
+    created_at: float
+
+
+class BackpackSourceCheckResponse(BaseModel):
+    source_id: str
+    fresh: bool
+    message: str
+
+
+class BackpackSourceIdRequest(StrictModel):
+    source_id: str
+
+
+class BackpackFileModel(BaseModel):
+    path: str
+    size: int
+
+
+class BackpackFileListResponse(BaseModel):
+    source_id: str
+    files: List[BackpackFileModel]
+
+
+class BackpackFileReadRequest(StrictModel):
+    source_id: str
+    path: str
+
+
+class BackpackFileResponse(BaseModel):
+    source_id: str
+    path: str
+    content: str

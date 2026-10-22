@@ -200,12 +200,13 @@ floability-remote daemon start --no-browser
 floability-remote mcp
 ```
 
-The MCP tools can inspect status, request or close a daemon-owned SSH
-connection, and check the connected host's Floability and batch-system
-readiness. The MCP process does not own SSH or deployment state; it calls the
-authenticated local daemon, which records requests with an `mcp` client
-identity. Passwords, MFA answers, key passphrases, bearer tokens, and Jupyter
-tokens must never be passed through MCP.
+The MCP tools can inspect status, manage a daemon-owned SSH connection, check
+remote readiness, inspect Git/local/ZIP backpacks, safely preview their files,
+and validate a deployment plan. Validation returns a `plan_id` but does not
+start the deployment. The MCP process does not own SSH or deployment state; it
+calls the authenticated local daemon, which records requests with an `mcp`
+client identity. Passwords, MFA answers, key passphrases, bearer tokens, and
+Jupyter tokens must never be passed through MCP.
 
 External MCP hosts can reuse a passwordless connection requested by a tool. If
 the host needs a password, MFA response, key passphrase, or new-host
@@ -236,6 +237,17 @@ floability-remote agent --model openai:gpt-5
 floability-remote agent --model anthropic:your-model-name
 floability-remote agent --prompt "Check Floability Remote status."
 ```
+
+The agent can connect, inspect a backpack, and prepare a validated plan:
+
+```text
+Connect to <USER@LOGIN_NODE>, inspect
+https://github.com/floability-hub/matrix-multiplication-script.git,
+and prepare an execute-mode deployment using Slurm.
+```
+
+It cannot start that plan yet. Execution is added in the next implementation
+phase.
 
 Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` before selecting the corresponding
 hosted provider. The agent asks for terminal approval before connecting or

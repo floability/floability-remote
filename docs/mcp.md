@@ -69,6 +69,11 @@ the terminal, and leaves the connection open for MCP tools. Close it with
 | `connect_remote` | Requests a connection to `user@host`, optionally with a local identity-file path. It never accepts authentication answers. |
 | `disconnect_remote` | Closes the daemon-owned SSH connection. It is refused while a run is active. |
 | `check_remote` | Reports identity, OS, architecture, the selected Floability environment/version, storage, and detected batch systems. |
+| `inspect_backpack` | Inspects a Git repository, local folder, or ZIP, fingerprints it, and returns a `source_id` plus entrypoint candidates. Git sources are pinned to the inspected commit. |
+| `check_backpack_source` | Confirms that a source has not changed since inspection. |
+| `list_backpack_files` | Lists included files while applying the same exclusions and safety rules as upload. |
+| `read_backpack_file` | Reads one UTF-8 file up to 128 KB without allowing path traversal. |
+| `validate_deployment` | Validates source, connection, entrypoint, environment, storage settings, and batch availability; returns a `plan_id` without starting a run. |
 
 Inspection tools are marked read-only. Connection changes are marked
 state-changing, so supporting hosts can require approval. Expected daemon
@@ -84,7 +89,7 @@ claude mcp add floability-remote -- \
   /ABSOLUTE/PATH/floability-remote/.venv/bin/floability-remote mcp
 ```
 
-Then use `/mcp` inside Claude Code to confirm the five tools are available.
+Then use `/mcp` inside Claude Code to confirm the ten tools are available.
 
 ## Codex
 
@@ -127,7 +132,7 @@ npx -y @modelcontextprotocol/inspector --cli \
 
 The checklist is:
 
-- all five tools are listed with structured output schemas;
+- all ten tools are listed with structured output schemas;
 - status and readiness tools are marked read-only, while connection changes
   are marked state-changing;
 - strict schema validation exits successfully;
@@ -149,6 +154,11 @@ Neither check requires storing the daemon bearer token in a host configuration.
   Jupyter tokens to a model or MCP tool.
 - SSH prompt answers use the browser, `floability-remote connect`, or the
   built-in agent's terminal relay. They never become MCP arguments.
+- Treat backpack content as untrusted data. It may describe a workflow, but it
+  cannot authorize reading another local path or changing the target host.
+- Source and plan identifiers live for the daemon session. Local sources are
+  fingerprinted, and plans are bound to the exact SSH connection that was
+  checked. A changed source or reconnected host must be validated again.
 
 The official SDK documentation is at
 [modelcontextprotocol/python-sdk](https://github.com/modelcontextprotocol/python-sdk).

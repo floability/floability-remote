@@ -14,10 +14,13 @@ from floability_remote.domain.errors import RemoteRunError
 from floability_remote.services.backpacks import (
     clone,
     discard_changes,
+    fingerprint,
     inspect,
     list_directories,
+    list_files,
     pack,
     provenance,
+    read_text,
     upload,
 )
 
@@ -37,6 +40,28 @@ class LocalBackpackTests(unittest.TestCase):
         (self.root / "workflow" / "__pycache__").mkdir()
         (self.root / "workflow" / "__pycache__" / "x.pyc").write_bytes(b"x")
         self.assertEqual(inspect(self.root).workflow_files, ("b.ipynb", "main.py"))
+
+    def test_lists_and_reads_included_files(self):
+        (self.root / "README.md").write_text("example\n")
+        self.assertEqual(
+            [item.path for item in list_files(self.root)],
+            ["README.md", "workflow/main.py"],
+        )
+        self.assertEqual(read_text(self.root, "workflow/main.py"), "print('ok')\n")
+
+    def test_file_preview_rejects_escape_and_binary_content(self):
+        (self.root / "workflow" / "binary.dat").write_bytes(b"\xff\x00")
+        with self.assertRaisesRegex(RemoteRunError, "relative"):
+            read_text(self.root, "../secret")
+        with self.assertRaisesRegex(RemoteRunError, "UTF-8"):
+            read_text(self.root, "workflow/binary.dat")
+
+    def test_fingerprint_changes_with_included_content_only(self):
+        before = fingerprint(self.root)
+        (self.root / ".DS_Store").write_text("ignored")
+        self.assertEqual(fingerprint(self.root), before)
+        (self.root / "workflow" / "main.py").write_text("print('changed')\n")
+        self.assertNotEqual(fingerprint(self.root), before)
 
     def test_list_directories_skips_hidden_and_symlinked_folders(self):
         parent = Path(self.temporary.name).resolve()
@@ -129,7 +154,13 @@ class LocalBackpackTests(unittest.TestCase):
         remote_root = Path(self.temporary.name) / "remote"
         with pack(self.root) as stream:
             result = subprocess.run(
-                ["bash", "-c", remote_scripts.UPLOAD_BACKPACK, "--", str(remote_root / "run-1")],
+                [
+                    "bash",
+                    "-c",
+                    remote_scripts.UPLOAD_BACKPACK,
+                    "--",
+                    str(remote_root / "run-1"),
+                ],
                 stdin=stream,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -156,11 +187,30 @@ class LocalCloneTests(unittest.TestCase):
         self.repository = self.root / "origin"
         (self.repository / "workflow").mkdir(parents=True)
         (self.repository / "workflow" / "main.py").write_text("print('one')\n")
-        subprocess.run(["git", "init", str(self.repository)], check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(self.repository), "config", "user.email", "test@example.org"], check=True)
-        subprocess.run(["git", "-C", str(self.repository), "config", "user.name", "Test"], check=True)
+        subprocess.run(
+            ["git", "init", str(self.repository)], check=True, capture_output=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.repository),
+                "config",
+                "user.email",
+                "test@example.org",
+            ],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.repository), "config", "user.name", "Test"],
+            check=True,
+        )
         subprocess.run(["git", "-C", str(self.repository), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(self.repository), "commit", "-m", "initial"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(self.repository), "commit", "-m", "initial"],
+            check=True,
+            capture_output=True,
+        )
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -203,7 +253,9 @@ class LocalCloneTests(unittest.TestCase):
                 self.close()
 
         destination = self.root / "downloaded"
-        with mock.patch("floability_remote.services.backpacks.shutil.which", return_value=None):
+        with mock.patch(
+            "floability_remote.services.backpacks.shutil.which", return_value=None
+        ):
             with mock.patch(
                 "floability_remote.services.backpacks.urllib.request.urlopen",
                 return_value=Response(archive_bytes.getvalue()),
@@ -212,8 +264,12 @@ class LocalCloneTests(unittest.TestCase):
                     "https://github.com/example/demo.git",
                     destination=destination,
                 )
-        self.assertEqual(result.provenance.original_repository, "https://github.com/example/demo.git")
-        self.assertEqual((destination / "workflow" / "main.py").read_text(), "print('ok')\n")
+        self.assertEqual(
+            result.provenance.original_repository, "https://github.com/example/demo.git"
+        )
+        self.assertEqual(
+            (destination / "workflow" / "main.py").read_text(), "print('ok')\n"
+        )
 
 
 if __name__ == "__main__":

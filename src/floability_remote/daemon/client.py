@@ -10,8 +10,17 @@ from ..application.errors import OperationError
 from ..application.contracts import (
     ClusterCheckRequest,
     ClusterCheckResponse,
+    BackpackFileListResponse,
+    BackpackFileReadRequest,
+    BackpackFileResponse,
+    BackpackSourceCheckResponse,
+    BackpackSourceIdRequest,
+    BackpackSourceRequest,
+    BackpackSourceResponse,
     ConnectionResponse,
     ConnectRequest,
+    DeploymentPlanRequest,
+    DeploymentPlanResponse,
     FileListResponse,
     RunRequest,
     RunResponse,
@@ -110,6 +119,51 @@ class DaemonClient:
         return ClusterCheckResponse.model_validate(
             self.request(
                 "POST", "/cluster/check", request.model_dump(mode="json"), timeout=30
+            )
+        )
+
+    def inspect_backpack_source(
+        self, request: BackpackSourceRequest
+    ) -> BackpackSourceResponse:
+        return BackpackSourceResponse.model_validate(
+            self.request(
+                "POST",
+                "/backpacks/sources/inspect",
+                request.model_dump(mode="json"),
+                timeout=120,
+            )
+        )
+
+    def check_backpack_source(self, source_id: str) -> BackpackSourceCheckResponse:
+        request = BackpackSourceIdRequest(source_id=source_id)
+        return BackpackSourceCheckResponse.model_validate(
+            self.request(
+                "POST", "/backpacks/sources/check", request.model_dump(mode="json")
+            )
+        )
+
+    def list_backpack_files(self, source_id: str) -> BackpackFileListResponse:
+        request = BackpackSourceIdRequest(source_id=source_id)
+        return BackpackFileListResponse.model_validate(
+            self.request(
+                "POST", "/backpacks/sources/files", request.model_dump(mode="json")
+            )
+        )
+
+    def read_backpack_file(self, source_id: str, path: str) -> BackpackFileResponse:
+        request = BackpackFileReadRequest(source_id=source_id, path=path)
+        return BackpackFileResponse.model_validate(
+            self.request(
+                "POST", "/backpacks/sources/read", request.model_dump(mode="json")
+            )
+        )
+
+    def validate_deployment_plan(
+        self, request: DeploymentPlanRequest
+    ) -> DeploymentPlanResponse:
+        return DeploymentPlanResponse.model_validate(
+            self.request(
+                "POST", "/plans/validate", request.model_dump(mode="json"), timeout=60
             )
         )
 

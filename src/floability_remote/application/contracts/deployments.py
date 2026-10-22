@@ -86,6 +86,60 @@ class RunRequest(StrictModel):
         )
 
 
+class DeploymentPlanRequest(StrictModel):
+    source_id: str
+    mode: str
+    batch_type: str
+    environment: EnvironmentModel = Field(default_factory=EnvironmentModel)
+    entrypoint: str = ""
+    remote_root: str = DEFAULT_REMOTE_ROOT
+    base_dir: str = ""
+    data_cache_dir: str = ""
+    jupyter_port: int = DEFAULT_JUPYTER_PORT
+    local_port: Optional[int] = None
+    floability_options: List[FloabilityOptionModel] = Field(default_factory=list)
+
+    def to_config(
+        self, connection: ConnectionConfig, backpack: BackpackSource
+    ) -> RunConfig:
+        return RunConfig(
+            mode=self.mode,
+            connection=connection,
+            backpack=backpack,
+            batch_type=self.batch_type,
+            environment=EnvironmentConfig(
+                env_name=self.environment.env_name,
+                floability_version=self.environment.floability_version,
+                conda_executable=self.environment.conda_executable,
+                reinstall_miniforge=self.environment.reinstall_miniforge,
+            ),
+            entrypoint=self.entrypoint,
+            remote_root=self.remote_root,
+            base_dir=self.base_dir,
+            data_cache_dir=self.data_cache_dir,
+            jupyter_port=self.jupyter_port,
+            local_port=self.local_port,
+            floability_options=tuple(
+                parse_floability_option(option.name, option.value)
+                for option in self.floability_options
+            ),
+        )
+
+
+class DeploymentPlanResponse(BaseModel):
+    valid: bool
+    plan_id: Optional[str] = None
+    source_id: str
+    target: str
+    mode: str
+    batch_type: str
+    entrypoint: str
+    source_commit: str = ""
+    issues: List[IssueModel] = Field(default_factory=list)
+    command: Optional[str] = None
+    created_at: Optional[float] = None
+
+
 class ValidationResponse(BaseModel):
     valid: bool
     issues: List[IssueModel]

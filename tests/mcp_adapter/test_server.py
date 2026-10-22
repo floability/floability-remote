@@ -52,6 +52,11 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
                     "connect_remote",
                     "disconnect_remote",
                     "check_remote",
+                    "inspect_backpack",
+                    "check_backpack_source",
+                    "list_backpack_files",
+                    "read_backpack_file",
+                    "validate_deployment",
                 },
             )
             self.assertTrue(tools["get_status"].annotations.read_only_hint)

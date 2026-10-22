@@ -78,6 +78,28 @@ class ApprovalPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("'password': '<redacted>'", output.getvalue())
         self.assertNotIn("never-print-this", output.getvalue())
 
+    async def test_local_backpack_inspection_requires_approval(self):
+        output = io.StringIO()
+        called = False
+
+        async def call(name, arguments):
+            nonlocal called
+            called = True
+
+        policy = ApprovalPolicy(
+            approval_tools=set(), input_function=lambda prompt: "no", output=output
+        )
+        result = await policy.process_tool_call(
+            None,
+            call,
+            "inspect_backpack",
+            {"source_type": "folder", "local_path": "/private/project"},
+        )
+
+        self.assertFalse(called)
+        self.assertTrue(result["denied"])
+        self.assertIn("inspect_backpack", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

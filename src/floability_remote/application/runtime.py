@@ -6,6 +6,7 @@ from typing import Optional
 from ..deployment.runs import RunManager
 from ..remote.connection import ConnectionManager
 from .audit import AuditRecorder
+from .planning import PlanningStore
 
 
 @dataclass
@@ -13,6 +14,7 @@ class ApplicationRuntime:
     connections: ConnectionManager
     runs: RunManager
     audit: AuditRecorder = field(default_factory=AuditRecorder)
+    planning: PlanningStore = field(default_factory=PlanningStore)
     shutting_down: bool = field(default=False)
 
     @classmethod
@@ -29,3 +31,4 @@ class ApplicationRuntime:
         self.shutting_down = True
         self.runs.close()
         self.connections.close()
+        self.planning.close()

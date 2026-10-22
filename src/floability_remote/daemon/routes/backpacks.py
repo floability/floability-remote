@@ -22,6 +22,13 @@ from ..schemas import (
     BackpackOpenRequest,
     BackpackPathRequest,
     BackpackProvenanceModel,
+    BackpackFileListResponse,
+    BackpackFileReadRequest,
+    BackpackFileResponse,
+    BackpackSourceCheckResponse,
+    BackpackSourceIdRequest,
+    BackpackSourceRequest,
+    BackpackSourceResponse,
 )
 
 
@@ -147,3 +154,47 @@ def open_local_backpack(
 ) -> Response:
     backpacks.open_backpack(body.path, body.editor, runtime, client)
     return Response(status_code=204)
+
+
+@router.post("/sources/inspect", response_model=BackpackSourceResponse)
+def inspect_source(
+    body: BackpackSourceRequest,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> BackpackSourceResponse:
+    from ...application.operations import plans
+
+    return plans.inspect_source(runtime, body, client)
+
+
+@router.post("/sources/check", response_model=BackpackSourceCheckResponse)
+def check_source(
+    body: BackpackSourceIdRequest,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> BackpackSourceCheckResponse:
+    from ...application.operations import plans
+
+    return plans.check_source(runtime, body.source_id, client)
+
+
+@router.post("/sources/files", response_model=BackpackFileListResponse)
+def list_source_files(
+    body: BackpackSourceIdRequest,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> BackpackFileListResponse:
+    from ...application.operations import plans
+
+    return plans.list_source_files(runtime, body.source_id, client)
+
+
+@router.post("/sources/read", response_model=BackpackFileResponse)
+def read_source_file(
+    body: BackpackFileReadRequest,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> BackpackFileResponse:
+    from ...application.operations import plans
+
+    return plans.read_source_file(runtime, body.source_id, body.path, client)

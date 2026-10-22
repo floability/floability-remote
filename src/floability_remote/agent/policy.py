@@ -6,8 +6,8 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, TextIO
 from ..application.audit import redact
 
 
-# Phase 1 tools are read-only. Keeping the mutation catalog here makes approval
-# deterministic as later phases register deployment tools.
+# Keep state changes and access to user-selected local sources behind a policy
+# enforced by the terminal host, not by the model.
 DEFAULT_APPROVAL_TOOLS = frozenset(
     {
         "connect_remote",
@@ -51,7 +51,10 @@ class ApprovalPolicy:
         """Show every call and gate state-changing tools outside model control."""
         del context
         visible_arguments = redact(arguments)
-        if name in self.approval_tools and not self.assume_yes:
+        local_source = name == "inspect_backpack" and arguments.get(
+            "source_type", "git"
+        ) in {"folder", "zip"}
+        if (name in self.approval_tools or local_source) and not self.assume_yes:
             prompt = f"\n[approve] {name} {visible_arguments} ? [y/N] "
             answer = await asyncio.to_thread(self.input_function, prompt)
             if answer.strip().lower() not in {"y", "yes"}:

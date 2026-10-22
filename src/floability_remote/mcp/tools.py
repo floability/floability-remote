@@ -2,19 +2,29 @@
 
 import secrets
 import time
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from .. import __version__
 from ..application.contracts import (
     ClusterCheckRequest,
     ClusterCheckResponse,
+    BackpackFileListResponse,
+    BackpackFileResponse,
+    BackpackSourceCheckResponse,
+    BackpackSourceRequest,
+    BackpackSourceResponse,
     ConnectionResponse,
     ConnectRequest,
+    DeploymentPlanRequest,
+    DeploymentPlanResponse,
+    EnvironmentModel,
+    FloabilityOptionModel,
     RunResponse,
 )
 from ..application.errors import OperationError
 from ..daemon.client import DaemonClient
 from ..domain.config import DEFAULT_ENV_NAME
+from ..domain.config import DEFAULT_JUPYTER_PORT, DEFAULT_REMOTE_ROOT
 from .schemas import RunStatusSummary, StatusResult
 
 
@@ -123,6 +133,74 @@ class MCPTools:
                 floability_version=floability_version,
                 conda_executable=conda_executable,
                 base_dir=base_dir,
+            )
+        )
+
+    def inspect_backpack(
+        self,
+        source_type: str = "git",
+        repository: str = "",
+        ref: str = "",
+        local_path: str = "",
+    ) -> BackpackSourceResponse:
+        """Inspect and fingerprint a Git, local-folder, or ZIP backpack."""
+        return self._client().inspect_backpack_source(
+            BackpackSourceRequest(
+                source_type=source_type,
+                repository=repository,
+                ref=ref,
+                local_path=local_path,
+            )
+        )
+
+    def check_backpack_source(self, source_id: str) -> BackpackSourceCheckResponse:
+        """Report whether an inspected backpack source is still unchanged."""
+        return self._client().check_backpack_source(source_id)
+
+    def list_backpack_files(self, source_id: str) -> BackpackFileListResponse:
+        """List regular files included in an inspected backpack."""
+        return self._client().list_backpack_files(source_id)
+
+    def read_backpack_file(self, source_id: str, path: str) -> BackpackFileResponse:
+        """Read one small UTF-8 file from an inspected backpack."""
+        return self._client().read_backpack_file(source_id, path)
+
+    def validate_deployment(
+        self,
+        source_id: str,
+        mode: str,
+        batch_type: str,
+        entrypoint: str = "",
+        env_name: str = DEFAULT_ENV_NAME,
+        floability_version: str = "",
+        conda_executable: str = "",
+        reinstall_miniforge: bool = False,
+        remote_root: str = DEFAULT_REMOTE_ROOT,
+        base_dir: str = "",
+        data_cache_dir: str = "",
+        jupyter_port: int = DEFAULT_JUPYTER_PORT,
+        local_port: Optional[int] = None,
+        floability_options: Optional[List[FloabilityOptionModel]] = None,
+    ) -> DeploymentPlanResponse:
+        """Validate a deployment and create a plan ID without starting it."""
+        return self._client().validate_deployment_plan(
+            DeploymentPlanRequest(
+                source_id=source_id,
+                mode=mode,
+                batch_type=batch_type,
+                entrypoint=entrypoint,
+                environment=EnvironmentModel(
+                    env_name=env_name,
+                    floability_version=floability_version,
+                    conda_executable=conda_executable,
+                    reinstall_miniforge=reinstall_miniforge,
+                ),
+                remote_root=remote_root,
+                base_dir=base_dir,
+                data_cache_dir=data_cache_dir,
+                jupyter_port=jupyter_port,
+                local_port=local_port,
+                floability_options=floability_options or [],
             )
         )
 

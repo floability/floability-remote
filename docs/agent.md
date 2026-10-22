@@ -120,6 +120,24 @@ interactive login, establish the reusable connection separately:
 floability-remote connect <USER@LOGIN_NODE>
 ```
 
+## Inspect and plan a deployment
+
+After connecting, ask the agent to inspect and plan a backpack:
+
+```text
+Inspect https://github.com/floability-hub/matrix-multiplication-script.git.
+Show me the likely entrypoint, then prepare an execute-mode plan using Slurm.
+```
+
+The agent may list the backpack and read small relevant files such as its
+README, software specification, or entrypoint. Git sources are pinned to the
+inspected commit. Local folders and ZIP files require an extra terminal
+approval and are fingerprinted, so edits invalidate an old plan.
+
+Successful validation returns a `plan_id` and reproducible CLI command. It does
+not execute anything. Starting and monitoring that plan belongs to the next
+phase.
+
 ## Approval policy
 
 `get_status`, `get_connection`, and `check_remote` are read-only and execute
@@ -147,7 +165,10 @@ The current agent can:
 - connect once and reuse the daemon-owned SSH session;
 - securely relay OpenSSH prompts outside model history;
 - check remote identity, platform, Floability, storage, and batch systems; and
-- disconnect when no run is active.
+- disconnect when no run is active;
+- inspect Git repositories, local folders, and ZIP backpacks;
+- safely list and preview backpack files; and
+- validate settings into a connection- and source-bound deployment plan.
 
-Inspecting a backpack, deploying, downloading results, and diagnosing failures
-are added in later phases.
+Starting deployments, downloading results, and diagnosing failures are added
+in later phases.
