@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from ...application.operations import ClientContext
@@ -13,6 +13,7 @@ from ...application.runtime import ApplicationRuntime
 from ...deployment.runs import Run
 from ..schemas import (
     ConfirmationAnswer,
+    RunEventPageResponse,
     RunRequest,
     RunResponse,
     ValidationResponse,
@@ -70,6 +71,41 @@ def get_run(
     client: ClientContext = Depends(get_client),
 ) -> RunResponse:
     return deployments.get(runtime, run_id, client)
+
+
+@router.get("/{run_id}/event-page", response_model=RunEventPageResponse)
+def run_event_page(
+    run_id: str,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    include_logs: bool = False,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> RunEventPageResponse:
+    """Return a bounded page of retained, redacted run events."""
+    return deployments.events(runtime, run_id, cursor, limit, include_logs, client)
+
+
+@router.get("/{run_id}/wait", response_model=RunEventPageResponse)
+def wait_for_run(
+    run_id: str,
+    cursor: int = Query(0, ge=0),
+    timeout_seconds: float = Query(10, ge=0, le=30),
+    limit: int = Query(50, ge=1, le=200),
+    include_logs: bool = False,
+    runtime: ApplicationRuntime = Depends(get_runtime),
+    client: ClientContext = Depends(get_client),
+) -> RunEventPageResponse:
+    """Wait at most 30 seconds for progress, a question, or completion."""
+    return deployments.wait(
+        runtime,
+        run_id,
+        cursor,
+        timeout_seconds,
+        limit,
+        include_logs,
+        client,
+    )
 
 
 @router.get("/{run_id}/events")

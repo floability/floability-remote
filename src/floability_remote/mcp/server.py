@@ -1,9 +1,10 @@
 """Official MCP SDK registrations and stdio server entry point."""
 
-from typing import List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from ..application.contracts import (
     BackpackFileListResponse,
@@ -14,6 +15,8 @@ from ..application.contracts import (
     ConnectionResponse,
     DeploymentPlanResponse,
     FloabilityOptionModel,
+    RunEventPageResponse,
+    RunResponse,
 )
 from ..domain.config import (
     DEFAULT_ENV_NAME,
@@ -93,7 +96,7 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     @server.tool(annotations=REMOTE_READ_ONLY)
     @tool_errors
     def inspect_backpack(
-        source_type: str = "git",
+        source_type: Literal["git", "folder", "zip"] = "git",
         repository: str = "",
         ref: str = "",
         local_path: str = "",
@@ -154,6 +157,55 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
             local_port,
             floability_options,
         )
+
+    @server.tool(annotations=STATE_CHANGE)
+    @tool_errors
+    def start_deployment(plan_id: str) -> RunResponse:
+        """Start an execute-mode deployment from a fresh validated plan ID."""
+        return facade.start_deployment(plan_id)
+
+    @server.tool(annotations=READ_ONLY)
+    @tool_errors
+    def get_run(run_id: str) -> RunResponse:
+        """Get state, pending confirmation, workspace, and log for one run."""
+        return facade.get_run(run_id)
+
+    @server.tool(annotations=READ_ONLY)
+    @tool_errors
+    def wait_for_run(
+        run_id: str,
+        cursor: Annotated[int, Field(ge=0)] = 0,
+        timeout_seconds: Annotated[float, Field(ge=0, le=30)] = 10,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        """Wait at most 30 seconds for redacted progress or completion."""
+        return facade.wait_for_run(run_id, cursor, timeout_seconds, limit, include_logs)
+
+    @server.tool(annotations=READ_ONLY)
+    @tool_errors
+    def get_run_events(
+        run_id: str,
+        cursor: Annotated[int, Field(ge=0)] = 0,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        """Read a cursor-based page of retained, redacted run events."""
+        return facade.get_run_events(run_id, cursor, limit, include_logs)
+
+    @server.tool(annotations=STATE_CHANGE)
+    @tool_errors
+    def answer_confirmation(
+        run_id: str, confirmation_id: str, approved: bool
+    ) -> RunResponse:
+        """Approve or decline a pending environment-installation question."""
+        return facade.answer_confirmation(run_id, confirmation_id, approved)
+
+    @server.tool(annotations=STATE_CHANGE)
+    @tool_errors
+    def cancel_run(run_id: str) -> RunResponse:
+        """Cancel an active deployment through Floability's cleanup path."""
+        return facade.cancel_run(run_id)
 
     return server
 

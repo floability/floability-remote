@@ -57,16 +57,33 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
                     "list_backpack_files",
                     "read_backpack_file",
                     "validate_deployment",
+                    "start_deployment",
+                    "get_run",
+                    "wait_for_run",
+                    "get_run_events",
+                    "answer_confirmation",
+                    "cancel_run",
                 },
             )
             self.assertTrue(tools["get_status"].annotations.read_only_hint)
             self.assertFalse(tools["get_status"].annotations.destructive_hint)
             self.assertFalse(tools["connect_remote"].annotations.read_only_hint)
             self.assertTrue(tools["check_remote"].annotations.read_only_hint)
+            self.assertFalse(tools["start_deployment"].annotations.read_only_hint)
+            self.assertTrue(tools["wait_for_run"].annotations.read_only_hint)
             self.assertEqual(
                 set(tools["connect_remote"].input_schema["properties"]),
                 {"target", "identity_file"},
             )
+            self.assertEqual(
+                tools["inspect_backpack"].input_schema["properties"]["source_type"][
+                    "enum"
+                ],
+                ["git", "folder", "zip"],
+            )
+            wait_properties = tools["wait_for_run"].input_schema["properties"]
+            self.assertEqual(wait_properties["timeout_seconds"]["maximum"], 30)
+            self.assertEqual(wait_properties["limit"]["maximum"], 200)
 
             result = await client.call_tool("get_status", {})
             self.assertFalse(result.is_error)

@@ -38,6 +38,12 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "list_backpack_files",
                 "read_backpack_file",
                 "validate_deployment",
+                "start_deployment",
+                "get_run",
+                "wait_for_run",
+                "get_run_events",
+                "answer_confirmation",
+                "cancel_run",
             },
         )
         self.assertIn("get_status", result.output)

@@ -133,6 +133,7 @@ class RunManagerTests(unittest.TestCase):
         self.assertEqual((pending.key, pending.message), (INSTALL_MINIFORGE, "Install Miniforge?"))
         self.assertFalse(run.answer_confirmation("stale", True))
         self.assertTrue(run.answer_confirmation(pending.id, True))
+        self.assertIsNone(run.confirmation)
         wait_for(lambda: run.finished)
         self.assertEqual(answers, [True])
         kinds = [event.kind for event in run.events_after(0)]

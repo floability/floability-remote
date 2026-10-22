@@ -4,12 +4,14 @@ import json
 import secrets
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ..application.errors import OperationError
 from ..application.contracts import (
     ClusterCheckRequest,
     ClusterCheckResponse,
+    ConfirmationAnswer,
     BackpackFileListResponse,
     BackpackFileReadRequest,
     BackpackFileResponse,
@@ -23,6 +25,7 @@ from ..application.contracts import (
     DeploymentPlanResponse,
     FileListResponse,
     RunRequest,
+    RunEventPageResponse,
     RunResponse,
     TaskVineStatusResponse,
     ValidationResponse,
@@ -167,6 +170,11 @@ class DaemonClient:
             )
         )
 
+    def start_deployment(self, plan_id: str) -> RunResponse:
+        return RunResponse.model_validate(
+            self.request("POST", f"/plans/{plan_id}/start", timeout=30)
+        )
+
     def validate_run(self, request: RunRequest) -> ValidationResponse:
         return ValidationResponse.model_validate(
             self.request("POST", "/runs/validate", request.model_dump(mode="json"))
@@ -180,6 +188,48 @@ class DaemonClient:
     def get_run(self, run_id: str) -> RunResponse:
         return RunResponse.model_validate(self.request("GET", f"/runs/{run_id}"))
 
+    def get_run_events(
+        self,
+        run_id: str,
+        cursor: int = 0,
+        limit: int = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        query = urlencode(
+            {
+                "cursor": cursor,
+                "limit": limit,
+                "include_logs": str(include_logs).lower(),
+            }
+        )
+        return RunEventPageResponse.model_validate(
+            self.request("GET", f"/runs/{run_id}/event-page?{query}")
+        )
+
+    def wait_for_run(
+        self,
+        run_id: str,
+        cursor: int = 0,
+        timeout_seconds: float = 10,
+        limit: int = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        query = urlencode(
+            {
+                "cursor": cursor,
+                "timeout_seconds": timeout_seconds,
+                "limit": limit,
+                "include_logs": str(include_logs).lower(),
+            }
+        )
+        return RunEventPageResponse.model_validate(
+            self.request(
+                "GET",
+                f"/runs/{run_id}/wait?{query}",
+                timeout=max(5, min(float(timeout_seconds), 30) + 5),
+            )
+        )
+
     def current_run(self) -> RunResponse:
         return RunResponse.model_validate(self.request("GET", "/runs/current"))
 
@@ -187,6 +237,17 @@ class DaemonClient:
         return RunResponse.model_validate(
             self.request("POST", f"/runs/{run_id}/cancel")
         )
+
+    def answer_run_confirmation(
+        self, run_id: str, confirmation_id: str, approved: bool
+    ) -> RunResponse:
+        body = ConfirmationAnswer(approved=approved)
+        self.request(
+            "POST",
+            f"/runs/{run_id}/confirmations/{confirmation_id}",
+            body.model_dump(mode="json"),
+        )
+        return self.get_run(run_id)
 
     def list_files(self, run_id: str) -> FileListResponse:
         return FileListResponse.model_validate(

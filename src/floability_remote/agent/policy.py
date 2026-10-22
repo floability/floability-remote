@@ -12,8 +12,9 @@ DEFAULT_APPROVAL_TOOLS = frozenset(
     {
         "connect_remote",
         "disconnect_remote",
-        "start_run",
+        "start_deployment",
         "cancel_run",
+        "answer_confirmation",
         "download_file",
         "apply_repair",
     }

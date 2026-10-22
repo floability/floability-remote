@@ -178,6 +178,8 @@ class RunResponse(BaseModel):
     finished_at: Optional[float] = None
     message: Optional[str] = None
     result: Dict[str, str] = Field(default_factory=dict)
+    remote_run_dir: Optional[str] = None
+    command_log: Optional[str] = None
     jupyter_url: Optional[str] = Field(
         None,
         description="Local Jupyter link while an interactive session is ready. "
@@ -186,6 +188,23 @@ class RunResponse(BaseModel):
     confirmation: Optional[ConfirmationModel] = None
     cancel_requested: bool = False
     event_count: int
+
+
+class IndexedEventModel(EventModel):
+    """One retained run event and its zero-based cursor position."""
+
+    cursor: int
+
+
+class RunEventPageResponse(BaseModel):
+    """A bounded page of redacted events from one background run."""
+
+    run: RunResponse
+    events: List[IndexedEventModel]
+    next_cursor: int
+    has_more: bool
+    terminal: bool
+    timed_out: bool = False
 
 
 class ConfirmationAnswer(StrictModel):

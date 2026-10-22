@@ -100,6 +100,22 @@ class ApprovalPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["denied"])
         self.assertIn("inspect_backpack", output.getvalue())
 
+    async def test_phase4_state_changes_use_default_approval(self):
+        for tool in ("start_deployment", "answer_confirmation", "cancel_run"):
+            with self.subTest(tool=tool):
+                called = False
+
+                async def call(name, arguments):
+                    nonlocal called
+                    called = True
+
+                policy = ApprovalPolicy(
+                    input_function=lambda prompt: "no", output=io.StringIO()
+                )
+                result = await policy.process_tool_call(None, call, tool, {})
+                self.assertFalse(called)
+                self.assertTrue(result["denied"])
+
 
 if __name__ == "__main__":
     unittest.main()

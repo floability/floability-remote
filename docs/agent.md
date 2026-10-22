@@ -120,13 +120,14 @@ interactive login, establish the reusable connection separately:
 floability-remote connect <USER@LOGIN_NODE>
 ```
 
-## Inspect and plan a deployment
+## Inspect, plan, and execute a deployment
 
 After connecting, ask the agent to inspect and plan a backpack:
 
 ```text
 Inspect https://github.com/floability-hub/matrix-multiplication-script.git.
-Show me the likely entrypoint, then prepare an execute-mode plan using Slurm.
+Show me the likely entrypoint, prepare an execute-mode plan using Slurm, start
+it, and monitor it until it finishes.
 ```
 
 The agent may list the backpack and read small relevant files such as its
@@ -134,15 +135,23 @@ README, software specification, or entrypoint. Git sources are pinned to the
 inspected commit. Local folders and ZIP files require an extra terminal
 approval and are fingerprinted, so edits invalidate an old plan.
 
-Successful validation returns a `plan_id` and reproducible CLI command. It does
-not execute anything. Starting and monitoring that plan belongs to the next
-phase.
+Successful validation returns a `plan_id` and reproducible CLI command but
+does not execute anything by itself. `start_deployment` accepts only that
+validated plan ID and returns immediately with a `run_id`. The agent follows
+the run with bounded waits and cursor-based redacted events. On completion it
+reports the retained remote workspace and command log.
+
+If remote environment preparation requires confirmation, the agent explains
+the pending question and the terminal asks for approval before the answer is
+sent. Raw command-output events are omitted by default and requested only when
+they are useful for diagnosing a failure.
 
 ## Approval policy
 
-`get_status`, `get_connection`, and `check_remote` are read-only and execute
-without an approval prompt. `connect_remote` and `disconnect_remote` require an
-explicit terminal confirmation. The model cannot bypass that policy.
+Status, inspection, planning, progress, and event tools are read-only and
+execute without an approval prompt. Connecting, disconnecting, starting,
+answering a confirmation, and cancelling require explicit terminal approval.
+The model cannot bypass that policy.
 
 Use `--yes` only when you deliberately want to preapprove those future calls:
 
@@ -168,7 +177,11 @@ The current agent can:
 - disconnect when no run is active;
 - inspect Git repositories, local folders, and ZIP backpacks;
 - safely list and preview backpack files; and
-- validate settings into a connection- and source-bound deployment plan.
+- validate settings into a connection- and source-bound deployment plan;
+- start one execute-mode run from that plan;
+- follow bounded, redacted progress and answer approved installation prompts;
+- cancel through Floability's cleanup path; and
+- report the final state, retained workspace, and command log.
 
-Starting deployments, downloading results, and diagnosing failures are added
-in later phases.
+Interactive Jupyter runs, result downloads through the agent, and automated
+failure diagnosis are added in later phases.

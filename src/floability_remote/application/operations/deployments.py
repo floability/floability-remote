@@ -1,15 +1,19 @@
 """Validate and manage background Floability deployments."""
 
+import time
 from typing import Optional
 
 from ...deployment.runs import Run, RunConflict, RunNotFound
 from ...domain.config import RunConfig
-from ...remote.connection import ConnectionConflict
+from ...domain.errors import RemoteRunError
+from ...remote.connection import ConnectionConflict, ConnectionState
 from ..validation import run_config_issues, validate_run_config
 from ..errors import OperationError
 from ..contracts import (
     ConfirmationModel,
+    IndexedEventModel,
     IssueModel,
+    RunEventPageResponse,
     RunResponse,
     ValidationResponse,
 )
@@ -39,6 +43,15 @@ def run_response(run: Run) -> RunResponse:
         finished_at=run.finished_at,
         message=run.message,
         result=run.result,
+        remote_run_dir=run.remote_run_dir,
+        command_log=(
+            run.result.get("log_path")
+            or (
+                f"{run.remote_run_dir}/{config.mode}-command.log"
+                if run.remote_run_dir
+                else None
+            )
+        ),
         jupyter_url=run.jupyter_url,
         confirmation=(
             ConfirmationModel(
@@ -119,6 +132,50 @@ def start(
         return run_response(run)
 
 
+def start_plan(
+    runtime: ApplicationRuntime,
+    plan_id: str,
+    client: ClientContext,
+) -> RunResponse:
+    """Start one execute-mode run from a fresh, validated deployment plan."""
+    connection = runtime.connections.snapshot()
+    if (
+        connection.state != ConnectionState.CONNECTED
+        or not connection.target
+        or connection.connected_at is None
+    ):
+        raise OperationError(
+            "connection_required",
+            "Connect to the validated remote host before starting the deployment.",
+            status=409,
+        )
+    try:
+        plan = runtime.planning.require_fresh_plan(
+            plan_id, connection.target, connection.connected_at
+        )
+    except RemoteRunError as error:
+        raise OperationError("stale_plan", str(error), status=409) from error
+    if plan.config.mode != "execute":
+        raise OperationError(
+            "execute_only",
+            "Interactive plans are not available yet. Validate an execute-mode plan.",
+            status=400,
+        )
+    with runtime.audit.operation(
+        "deployment.start_plan",
+        client=client.kind,
+        session_id=client.session_id,
+        target=connection.target,
+        inputs={"plan_id": plan.id, "source_id": plan.source_id},
+    ) as audit:
+        try:
+            run = runtime.runs.start(plan.config)
+        except (RunConflict, ConnectionConflict) as error:
+            raise OperationError("conflict", str(error), status=409) from error
+        audit.identifiers(plan_id=plan.id, run_id=run.id)
+        return run_response(run)
+
+
 def get(runtime: ApplicationRuntime, run_id: str, client=None) -> RunResponse:
     run = find_run(runtime, run_id)
     with operation_context(
@@ -127,6 +184,94 @@ def get(runtime: ApplicationRuntime, run_id: str, client=None) -> RunResponse:
         if audit is not None:
             audit.identifiers(run_id=run.id)
         return run_response(run)
+
+
+def _event_page(
+    run: Run,
+    cursor: int,
+    limit: int,
+    include_logs: bool,
+    *,
+    timed_out: bool = False,
+) -> RunEventPageResponse:
+    cursor = min(max(cursor, 0), run.event_count)
+    limit = max(1, min(limit, 200))
+    selected = []
+    next_cursor = cursor
+    for index, event in enumerate(run.events_after(cursor), start=cursor):
+        next_cursor = index + 1
+        if include_logs or event.kind != "log":
+            selected.append(IndexedEventModel(cursor=index, **event.to_dict()))
+            if len(selected) >= limit:
+                break
+    event_count = run.event_count
+    has_more = next_cursor < event_count
+    return RunEventPageResponse(
+        run=run_response(run),
+        events=selected,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        terminal=run.finished and not has_more,
+        timed_out=timed_out,
+    )
+
+
+def events(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    cursor: int,
+    limit: int,
+    include_logs: bool,
+    client: ClientContext,
+) -> RunEventPageResponse:
+    run = find_run(runtime, run_id)
+    with runtime.audit.operation(
+        "run.get_events",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+        inputs={"cursor": cursor, "limit": limit, "include_logs": include_logs},
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        return _event_page(run, cursor, limit, include_logs)
+
+
+def wait(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    cursor: int,
+    timeout_seconds: float,
+    limit: int,
+    include_logs: bool,
+    client: ClientContext,
+) -> RunEventPageResponse:
+    """Wait a bounded time for visible progress, confirmation, or completion."""
+    run = find_run(runtime, run_id)
+    timeout_seconds = max(0.0, min(timeout_seconds, 30.0))
+    deadline = time.monotonic() + timeout_seconds
+    with runtime.audit.operation(
+        "run.wait",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+        inputs={
+            "cursor": cursor,
+            "timeout_seconds": timeout_seconds,
+            "limit": limit,
+            "include_logs": include_logs,
+        },
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        current = max(cursor, 0)
+        while True:
+            page = _event_page(run, current, limit, include_logs)
+            if page.events or page.terminal or page.has_more:
+                return page
+            current = page.next_cursor
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return _event_page(run, current, limit, include_logs, timed_out=True)
+            run.wait_for_events(current, remaining)
 
 
 def latest(runtime: ApplicationRuntime, client=None) -> RunResponse:
@@ -163,7 +308,7 @@ def answer_confirmation(
     confirmation_id: str,
     approved: bool,
     client: ClientContext,
-) -> None:
+) -> RunResponse:
     run = find_run(runtime, run_id)
     with runtime.audit.operation(
         "run.answer_confirmation",
@@ -179,3 +324,4 @@ def answer_confirmation(
                 "This question is no longer waiting for an answer.",
                 status=404,
             )
+        return run_response(run)

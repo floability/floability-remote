@@ -2,7 +2,7 @@
 
 import secrets
 import time
-from typing import Callable, List, Optional
+from typing import Callable, List, Literal, Optional
 
 from .. import __version__
 from ..application.contracts import (
@@ -19,6 +19,7 @@ from ..application.contracts import (
     DeploymentPlanResponse,
     EnvironmentModel,
     FloabilityOptionModel,
+    RunEventPageResponse,
     RunResponse,
 )
 from ..application.errors import OperationError
@@ -36,7 +37,7 @@ def _discover_client(client: str, session_id: str) -> DaemonClient:
 
 
 class MCPTools:
-    """Read-only daemon facade shared by the MCP registrations and tests."""
+    """Daemon facade shared by the MCP registrations and adapter tests."""
 
     def __init__(
         self,
@@ -138,7 +139,7 @@ class MCPTools:
 
     def inspect_backpack(
         self,
-        source_type: str = "git",
+        source_type: Literal["git", "folder", "zip"] = "git",
         repository: str = "",
         ref: str = "",
         local_path: str = "",
@@ -202,6 +203,87 @@ class MCPTools:
                 local_port=local_port,
                 floability_options=floability_options or [],
             )
+        )
+
+    def start_deployment(self, plan_id: str) -> RunResponse:
+        """Start an execute-mode deployment from a validated plan ID."""
+        return self._safe_run(self._client().start_deployment(plan_id))
+
+    def get_run(self, run_id: str) -> RunResponse:
+        """Return the latest state and retained-path summary for one run."""
+        return self._safe_run(self._client().get_run(run_id))
+
+    def wait_for_run(
+        self,
+        run_id: str,
+        cursor: int = 0,
+        timeout_seconds: float = 10,
+        limit: int = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        """Wait up to 30 seconds for progress, a question, or completion."""
+        cursor = max(0, cursor)
+        timeout_seconds = max(0, min(timeout_seconds, 30))
+        limit = max(1, min(limit, 200))
+        return self._safe_page(
+            self._client().wait_for_run(
+                run_id, cursor, timeout_seconds, limit, include_logs
+            )
+        )
+
+    def get_run_events(
+        self,
+        run_id: str,
+        cursor: int = 0,
+        limit: int = 50,
+        include_logs: bool = False,
+    ) -> RunEventPageResponse:
+        """Return retained redacted events without waiting for new progress."""
+        cursor = max(0, cursor)
+        limit = max(1, min(limit, 200))
+        return self._safe_page(
+            self._client().get_run_events(run_id, cursor, limit, include_logs)
+        )
+
+    def answer_confirmation(
+        self, run_id: str, confirmation_id: str, approved: bool
+    ) -> RunResponse:
+        """Answer one pending installation confirmation outside model control."""
+        return self._safe_run(
+            self._client().answer_run_confirmation(run_id, confirmation_id, approved)
+        )
+
+    def cancel_run(self, run_id: str) -> RunResponse:
+        """Request cleanup-aware cancellation of one active deployment."""
+        return self._safe_run(self._client().cancel_run(run_id))
+
+    @staticmethod
+    def _safe_run(run: RunResponse) -> RunResponse:
+        """Keep a tokenized Jupyter URL out of MCP and model history."""
+        return run.model_copy(update={"jupyter_url": None})
+
+    @classmethod
+    def _safe_page(cls, page: RunEventPageResponse) -> RunEventPageResponse:
+        events = []
+        for event in page.events:
+            if event.kind != "ready":
+                events.append(event)
+                continue
+            data = {
+                key: value
+                for key, value in event.data.items()
+                if "url" not in key.lower() and "token" not in key.lower()
+            }
+            events.append(
+                event.model_copy(
+                    update={
+                        "message": "Interactive session is ready in the browser.",
+                        "data": data,
+                    }
+                )
+            )
+        return page.model_copy(
+            update={"run": cls._safe_run(page.run), "events": events}
         )
 
     @staticmethod

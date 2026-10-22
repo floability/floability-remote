@@ -1,6 +1,6 @@
 """Local backpack inspection, browsing, cloning, and editor contracts."""
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,7 @@ class BackpackOpenRequest(StrictModel):
 
 
 class BackpackSourceRequest(StrictModel):
-    source_type: str = "git"
+    source_type: Literal["git", "folder", "zip"] = "git"
     repository: str = ""
     ref: str = ""
     local_path: str = ""

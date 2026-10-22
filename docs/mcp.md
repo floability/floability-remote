@@ -74,8 +74,15 @@ the terminal, and leaves the connection open for MCP tools. Close it with
 | `list_backpack_files` | Lists included files while applying the same exclusions and safety rules as upload. |
 | `read_backpack_file` | Reads one UTF-8 file up to 128 KB without allowing path traversal. |
 | `validate_deployment` | Validates source, connection, entrypoint, environment, storage settings, and batch availability; returns a `plan_id` without starting a run. |
+| `start_deployment` | Starts one execute-mode run from a fresh validated `plan_id` and returns immediately with a `run_id`. |
+| `get_run` | Reports run state, a pending confirmation, and retained workspace and command-log paths. |
+| `wait_for_run` | Waits at most 30 seconds for progress, a question, or completion and returns a cursor-based event page. |
+| `get_run_events` | Reads retained redacted events without waiting. Raw log events are omitted unless explicitly requested. |
+| `answer_confirmation` | Approves or declines one pending environment-installation question. |
+| `cancel_run` | Requests cancellation through Floability's existing remote cleanup path. |
 
-Inspection tools are marked read-only. Connection changes are marked
+Inspection, planning, status, and progress tools are marked read-only.
+Connection changes, starting, confirmations, and cancellation are marked
 state-changing, so supporting hosts can require approval. Expected daemon
 failures become MCP tool errors the model can explain; unexpected exceptions
 remain private server failures.
@@ -89,7 +96,7 @@ claude mcp add floability-remote -- \
   /ABSOLUTE/PATH/floability-remote/.venv/bin/floability-remote mcp
 ```
 
-Then use `/mcp` inside Claude Code to confirm the ten tools are available.
+Then use `/mcp` inside Claude Code to confirm the sixteen tools are available.
 
 ## Codex
 
@@ -132,7 +139,7 @@ npx -y @modelcontextprotocol/inspector --cli \
 
 The checklist is:
 
-- all ten tools are listed with structured output schemas;
+- all sixteen tools are listed with structured output schemas;
 - status and readiness tools are marked read-only, while connection changes
   are marked state-changing;
 - strict schema validation exits successfully;

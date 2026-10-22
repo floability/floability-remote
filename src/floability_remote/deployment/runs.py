@@ -155,6 +155,7 @@ class Run:
             if self._confirmation is None or self._confirmation.id != confirmation_id:
                 return False
             self._confirmation_answer = approved
+            self._confirmation = None
         self._confirmation_ready.set()
         return True
 
@@ -162,6 +163,7 @@ class Run:
         with self._changed:
             pending = self._confirmation
             self._confirmation_answer = False
+            self._confirmation = None
         if pending is not None:
             self._confirmation_ready.set()
 

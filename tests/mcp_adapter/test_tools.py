@@ -11,6 +11,9 @@ from floability_remote.application.contracts import (
     ClusterCheckResponse,
     ConnectionResponse,
     DeploymentPlanResponse,
+    IndexedEventModel,
+    RunEventPageResponse,
+    RunResponse,
 )
 from floability_remote.application.errors import OperationError
 from floability_remote.mcp.tools import MCPTools
@@ -207,6 +210,69 @@ class MCPToolsTests(unittest.TestCase):
         request = client.validate_deployment_plan.call_args.args[0]
         self.assertEqual(request.source_id, "source-1")
         self.assertEqual(request.environment.env_name, "floability-remote-managed")
+
+    def test_phase4_tools_preserve_run_id_cursor_and_confirmation(self):
+        client = mock.Mock()
+        run = RunResponse(
+            id="run-1",
+            mode="execute",
+            state="running",
+            target="user@login.example.edu",
+            repository="https://github.com/example/demo.git",
+            ref="abc123",
+            batch_type="slurm",
+            entrypoint="main.py",
+            created_at=1.0,
+            event_count=1,
+            jupyter_url="http://127.0.0.1:8888/?token=private-token",
+        )
+        page = RunEventPageResponse(
+            run=run,
+            events=[
+                IndexedEventModel(
+                    cursor=0,
+                    kind="ready",
+                    message="Open http://127.0.0.1:8888/?token=private-token",
+                    data={"url": "http://127.0.0.1:8888/?token=private-token"},
+                    timestamp=1.0,
+                )
+            ],
+            next_cursor=1,
+            has_more=False,
+            terminal=False,
+        )
+        client.start_deployment.return_value = run
+        client.get_run.return_value = run
+        client.wait_for_run.return_value = page
+        client.get_run_events.return_value = page
+        client.answer_run_confirmation.return_value = run
+        client.cancel_run.return_value = run
+        tools = MCPTools(client_factory=lambda kind, session: client)
+
+        self.assertIsNone(tools.start_deployment("plan-1").jupyter_url)
+        self.assertIsNone(tools.get_run("run-1").jupyter_url)
+        self.assertEqual(
+            tools.wait_for_run(
+                "run-1", cursor=-4, timeout_seconds=60, limit=500
+            ).next_cursor,
+            1,
+        )
+        self.assertEqual(
+            tools.get_run_events("run-1", cursor=5).events[0].message,
+            "Interactive session is ready in the browser.",
+        )
+        self.assertNotIn("url", tools.get_run_events("run-1", cursor=5).events[0].data)
+        tools.answer_confirmation("run-1", "confirm-1", True)
+        tools.cancel_run("run-1")
+
+        client.start_deployment.assert_called_once_with("plan-1")
+        client.wait_for_run.assert_called_once_with("run-1", 0, 30, 200, False)
+        self.assertEqual(client.get_run_events.call_count, 2)
+        client.get_run_events.assert_called_with("run-1", 5, 50, False)
+        client.answer_run_confirmation.assert_called_once_with(
+            "run-1", "confirm-1", True
+        )
+        client.cancel_run.assert_called_once_with("run-1")
 
 
 if __name__ == "__main__":

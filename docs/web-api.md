@@ -199,10 +199,18 @@ routes are authenticated loopback APIs; they do not start a run.
 | `POST /api/v1/backpacks/sources/files` | List files included by the backpack safety rules. |
 | `POST /api/v1/backpacks/sources/read` | Read one named UTF-8 file, limited to 128 KB. |
 | `POST /api/v1/plans/validate` | Combine `source_id` with run settings and the open SSH connection, verify the entrypoint and detected batch system, and return a `plan_id` only when valid. |
+| `POST /api/v1/plans/{plan_id}/start` | Start one execute-mode deployment from a fresh plan and return its `run_id` immediately. |
+| `GET /api/v1/runs/{run_id}/event-page` | Read a bounded cursor-based page of retained redacted events. Raw log events are optional. |
+| `GET /api/v1/runs/{run_id}/wait` | Wait at most 30 seconds for progress, confirmation, or completion and return an event page. |
 
 Plans are bound to the source fingerprint and the current connection's start
 time. Reconnecting or modifying a local source makes the plan stale. Source
 snapshots and plans are removed when the daemon exits.
+
+Only one run may be active. Starting checks the source fingerprint and exact
+SSH connection again; stale and interactive plans are refused. The normal run
+status, confirmation, and cancellation routes remain authoritative, and
+cancellation uses Floability's cleanup path.
 
 ### Connection
 
