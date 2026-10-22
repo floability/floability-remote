@@ -162,12 +162,29 @@ the pending question and the terminal asks for approval before the answer is
 sent. Raw command-output events are omitted by default and requested only when
 they are useful for diagnosing a failure.
 
+## Inspect and retrieve results
+
+After a run finishes, ask the agent to inventory the retained source backpack
+and materialized instance before selecting files:
+
+```text
+List the files from run <RUN_ID>. Read workflow/results.csv and summarize what
+it contains. Then download that file and the command log to
+~/Downloads/<RUN_ID>-results.
+```
+
+The inventory returns stable file IDs. Small UTF-8 files can be read for a
+summary. Binary or larger files must be downloaded without being placed in the
+model context. To retrieve the complete allowed inventory, explicitly ask for
+all files and provide a new destination directory.
+
 ## Approval policy
 
-Status, inspection, planning, progress, and event tools are read-only and
-execute without an approval prompt. Connecting, disconnecting, starting,
-answering a confirmation, and cancelling require explicit terminal approval.
-The model cannot bypass that policy.
+Status, inventory, planning, progress, and event tools execute without an
+approval prompt. Connecting, disconnecting, starting, answering a
+confirmation, cancelling, exposing remote file content to the model, and
+writing downloads locally require explicit terminal approval. The model cannot
+bypass that policy.
 
 Use `--yes` only when you deliberately want to preapprove those future calls:
 
@@ -183,23 +200,26 @@ tokens must never be entered into chat.
 
 The current agent can:
 
-- whether the local daemon is ready;
-- whether the daemon owns an SSH connection;
-- non-secret connection metadata;
-- whether a run is active or which run most recently completed;
+- report whether the local daemon is ready, whether it owns an SSH connection,
+  non-secret connection metadata, and the active or most recent run;
 - connect once and reuse the daemon-owned SSH session;
 - securely relay OpenSSH prompts outside model history;
-- check remote identity, platform, Floability, storage, and batch systems; and
+- check remote identity, platform, Floability, storage, and batch systems;
 - disconnect when no run is active;
 - inspect Git repositories, local folders, and ZIP backpacks;
-- safely list and preview backpack files; and
+- safely list and preview backpack files;
 - validate settings into a connection- and source-bound deployment plan;
 - start either an execute-mode or interactive run from that plan;
 - follow bounded, redacted progress and answer approved installation prompts;
 - report model-safe Jupyter tunnel readiness and live TaskVine status;
 - deliver the working Jupyter link through trusted terminal output;
-- cancel through Floability's cleanup path; and
-- report the final state, retained workspace, and command log.
+- cancel through Floability's cleanup path;
+- report the final state, retained workspace, and command log;
+- list retained source-backpack and materialized-instance files;
+- read a selected UTF-8 file up to 128 KB for inspection or summarization; and
+- download selected files, or the complete allowed inventory, into a new local
+  directory.
 
-Result downloads through the agent and automated failure diagnosis are added
-in later phases.
+Reading remote content and writing downloaded files require terminal approval.
+Automated failure diagnosis, repair, and result visualization remain later
+phases.

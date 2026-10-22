@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import os
+import re
 import sys
 from typing import Any, List
 
@@ -17,6 +18,11 @@ from .runtime import create_agent
 
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 
+MAX_HISTORY_TURNS = 2
+_TEXTUAL_TOOL_CALL = re.compile(
+    r"<(?:function=|tool_call\b)|</(?:function|tool_call)>", re.IGNORECASE
+)
+
 
 def _usage_line(result: Any) -> str:
     usage = result.usage
@@ -24,6 +30,38 @@ def _usage_line(result: Any) -> str:
         f"[usage] requests={usage.requests} tool_calls={usage.tool_calls} "
         f"in={usage.input_tokens} out={usage.output_tokens}"
     )
+
+
+def _starts_user_turn(message: Any) -> bool:
+    return any(
+        getattr(part, "part_kind", "") == "user-prompt"
+        or part.__class__.__name__ == "UserPromptPart"
+        for part in getattr(message, "parts", ())
+    )
+
+
+def _compact_history(
+    messages: List[Any], max_turns: int = MAX_HISTORY_TURNS
+) -> List[Any]:
+    """Retain complete recent turns so local-model context stays bounded."""
+    retained = list(messages)
+    starts = [
+        index for index, message in enumerate(retained) if _starts_user_turn(message)
+    ]
+    if max_turns > 0 and len(starts) > max_turns:
+        retained = retained[starts[-max_turns] :]
+    return retained
+
+
+def _warn_unexecuted_tool_text(result: Any) -> None:
+    output = str(getattr(result, "output", ""))
+    usage = result.usage
+    if usage.tool_calls == 0 and _TEXTUAL_TOOL_CALL.search(output):
+        print(
+            "[agent] WARNING: The model printed a tool-call-like block as text; "
+            "no tool was executed. Use a model with structured tool calling.",
+            file=sys.stderr,
+        )
 
 
 async def _ask(agent, prompt: str, history: List[Any], relay: ConnectionPromptRelay):
@@ -35,8 +73,9 @@ async def _ask(agent, prompt: str, history: List[Any], relay: ConnectionPromptRe
         stop_relay.set()
         await relay_task
     print(f"\nagent> {result.output}")
+    _warn_unexecuted_tool_text(result)
     print(_usage_line(result), file=sys.stderr)
-    return result.all_messages()
+    return _compact_history(result.all_messages())
 
 
 async def _session_notifier(client: DaemonClient, stop: asyncio.Event) -> None:
@@ -78,8 +117,11 @@ async def _chat(args: argparse.Namespace) -> int:
         flush=True,
     )
 
-    policy = ApprovalPolicy(assume_yes=args.yes)
     relay = ConnectionPromptRelay()
+    policy = ApprovalPolicy(
+        assume_yes=args.yes,
+        before_call=relay.before_tool_call,
+    )
     agent = create_agent(model, policy)
     history: List[Any] = []
     notifier_stop = asyncio.Event()

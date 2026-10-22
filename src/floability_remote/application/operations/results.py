@@ -2,13 +2,22 @@
 
 import time
 from dataclasses import asdict
+from pathlib import Path
 
 from ...domain.errors import RemoteRunError
 from ...remote.connection import ConnectionConflict
 from ...services.files import FileService
 from ...services.taskvine import TaskVineService
 from ..errors import OperationError
-from ..contracts import FileListResponse, RemoteFileModel, TaskVineStatusResponse
+from ..contracts import (
+    DownloadedFileModel,
+    FileListResponse,
+    RemoteFileModel,
+    RunFileContentResponse,
+    RunFilesDownloadRequest,
+    RunFilesDownloadResponse,
+    TaskVineStatusResponse,
+)
 from ..runtime import ApplicationRuntime
 from . import ClientContext
 from .deployments import find_run
@@ -84,6 +93,86 @@ def list_run_files(runtime: ApplicationRuntime, run_id: str, client: ClientConte
         except RemoteRunError as error:
             raise OperationError("files_unavailable", str(error), status=409) from error
         return inventory_response(run.id, inventory)
+
+
+def read_run_file(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    file_id: str,
+    client: ClientContext,
+) -> RunFileContentResponse:
+    run = _ready_run(runtime, run_id)
+    with runtime.audit.operation(
+        "results.read_file",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+        inputs={"file_id": file_id},
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        try:
+            preview = FileService(
+                _session(runtime, run.config.connection.target)
+            ).preview(run.result["run_dir"], file_id)
+        except RemoteRunError as error:
+            raise OperationError(
+                "file_preview_unavailable", str(error), status=409
+            ) from error
+        return RunFileContentResponse(
+            run_id=run.id,
+            file_id=preview.file.id,
+            group=preview.file.group,
+            path=preview.file.path,
+            size=preview.file.size,
+            content=preview.content,
+        )
+
+
+def download_run_files(
+    runtime: ApplicationRuntime,
+    run_id: str,
+    request: RunFilesDownloadRequest,
+    client: ClientContext,
+) -> RunFilesDownloadResponse:
+    run = _ready_run(runtime, run_id)
+    with runtime.audit.operation(
+        "results.download_files",
+        client=client.kind,
+        session_id=client.session_id,
+        target=run.config.connection.target,
+        inputs={
+            "file_ids": request.file_ids,
+            "all_files": request.all_files,
+            "destination": request.destination,
+        },
+    ) as audit:
+        audit.identifiers(run_id=run.id)
+        try:
+            batch = FileService(
+                _session(runtime, run.config.connection.target)
+            ).download_many(
+                run.result["run_dir"],
+                request.file_ids,
+                Path(request.destination),
+                all_files=request.all_files,
+            )
+        except RemoteRunError as error:
+            raise OperationError("download_unavailable", str(error), status=409) from error
+        return RunFilesDownloadResponse(
+            run_id=run.id,
+            destination=str(batch.destination),
+            file_count=len(batch.files),
+            total_bytes=batch.total_bytes,
+            files=[
+                DownloadedFileModel(
+                    file_id=item.id,
+                    path=item.path,
+                    size=item.size,
+                    local_path=str(batch.destination / Path(item.path)),
+                )
+                for item in batch.files
+            ],
+        )
 
 
 def download_temporary(

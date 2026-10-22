@@ -3,10 +3,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from floability_remote.remote import scripts as remote_scripts
 from floability_remote.domain.errors import RemoteRunError
-from floability_remote.services.files import FileService, MAX_DOWNLOAD_BYTES
+from floability_remote.remote import scripts as remote_scripts
+from floability_remote.services.files import (
+    FileInventory,
+    FileService,
+    MAX_DOWNLOAD_BYTES,
+    MAX_PREVIEW_BYTES,
+)
 
 
 class LocalScriptSession:
@@ -61,6 +67,15 @@ class FileServiceTests(unittest.TestCase):
             "finished\n"
         )
 
+        backpack = self.run_dir / "backpack"
+        (backpack / "workflow").mkdir(parents=True)
+        (backpack / "README.md").write_text("# Example backpack\n")
+        (backpack / "workflow" / "main.py").write_text("print('hello')\n")
+        (backpack / ".git" / "objects").mkdir(parents=True)
+        (backpack / ".git" / "config").write_text("internal")
+        (backpack / "__pycache__").mkdir()
+        (backpack / "__pycache__" / "main.pyc").write_bytes(b"compiled")
+
         workflow = self.instance / "workflow"
         workflow.mkdir()
         (workflow / "result.csv").write_bytes(b"answer,42\n")
@@ -112,13 +127,15 @@ class FileServiceTests(unittest.TestCase):
             paths,
             [
                 "execute-command.log",
+                "backpack/README.md",
+                "backpack/workflow/main.py",
+                "workflow/nested/plot.png",
+                "workflow/result.csv",
                 "logs/vine_factory.stdout",
                 "logs/workflow.log",
                 "catalog_update.json",
                 "metadata/run.json",
                 "metrics/summary.json",
-                "workflow/nested/plot.png",
-                "workflow/result.csv",
             ],
         )
         self.assertNotIn("workflow/cached-input.csv", paths)
@@ -127,6 +144,8 @@ class FileServiceTests(unittest.TestCase):
         self.assertFalse(any(".ipynb_checkpoints" in path for path in paths))
         self.assertFalse(any("pyuser" in path for path in paths))
         self.assertFalse(any("hidden.txt" in path for path in paths))
+        self.assertFalse(any(".git" in path for path in paths))
+        self.assertFalse(any("__pycache__" in path for path in paths))
 
     def test_download_reinventories_and_copies_exact_binary_content(self):
         destination = self.root / "downloaded.csv"
@@ -145,16 +164,83 @@ class FileServiceTests(unittest.TestCase):
             self.service.download(str(self.run_dir), "workflow/result.csv", destination)
         self.assertEqual(destination.read_text(), "keep")
 
+    def test_small_utf8_file_can_be_previewed(self):
+        preview = self.service.preview(str(self.run_dir), "workflow/result.csv")
+
+        self.assertEqual(preview.file.path, "workflow/result.csv")
+        self.assertEqual(preview.content, "answer,42\n")
+
+    def test_binary_and_large_files_cannot_be_previewed(self):
+        binary = self.instance / "workflow" / "binary.dat"
+        binary.write_bytes(b"prefix\x00payload")
+        with self.assertRaisesRegex(RemoteRunError, "binary"):
+            self.service.preview(str(self.run_dir), "workflow/binary.dat")
+
+        large = self.instance / "workflow" / "large.txt"
+        large.write_bytes(b"x" * (MAX_PREVIEW_BYTES + 1))
+        with self.assertRaisesRegex(RemoteRunError, "preview limit"):
+            self.service.preview(str(self.run_dir), "workflow/large.txt")
+
+    def test_multiple_files_are_downloaded_to_a_new_directory(self):
+        destination = self.root / "selected-results"
+        inventory = self.service.list_files(str(self.run_dir))
+        selected = [
+            item.id
+            for item in inventory.files
+            if item.path in {"backpack/README.md", "workflow/result.csv"}
+        ]
+
+        batch = self.service.download_many(
+            str(self.run_dir), selected, destination
+        )
+
+        self.assertEqual(len(batch.files), 2)
+        self.assertEqual(
+            (destination / "backpack" / "README.md").read_text(),
+            "# Example backpack\n",
+        )
+        self.assertEqual(
+            (destination / "workflow" / "result.csv").read_bytes(),
+            b"answer,42\n",
+        )
+
+    def test_all_files_download_refuses_an_existing_destination(self):
+        destination = self.root / "existing"
+        destination.mkdir()
+        with self.assertRaisesRegex(RemoteRunError, "already exists"):
+            self.service.download_many(
+                str(self.run_dir), [], destination, all_files=True
+            )
+
+    def test_all_files_download_refuses_a_truncated_inventory(self):
+        inventory = self.service.list_files(str(self.run_dir))
+        truncated = FileInventory(
+            files=inventory.files,
+            instance_found=inventory.instance_found,
+            truncated=True,
+            python_path=inventory.python_path,
+        )
+        with mock.patch.object(self.service, "list_files", return_value=truncated):
+            with self.assertRaisesRegex(RemoteRunError, "inventory was truncated"):
+                self.service.download_many(
+                    str(self.run_dir), [], self.root / "all-files", all_files=True
+                )
+
     def test_unknown_and_symlink_files_cannot_be_downloaded(self):
         with self.assertRaisesRegex(RemoteRunError, "not found"):
             self.service.find_file(str(self.run_dir), "workflow/cached-input.csv")
 
-    def test_only_command_log_is_available_when_instance_was_not_created(self):
+    def test_backpack_and_command_log_remain_when_instance_was_not_created(self):
         (self.run_dir / "execute-command.log").write_text("failed early\n")
         inventory = self.service.list_files(str(self.run_dir))
         self.assertFalse(inventory.instance_found)
         self.assertEqual(
-            [item.path for item in inventory.files], ["execute-command.log"]
+            [item.path for item in inventory.files],
+            [
+                "execute-command.log",
+                "backpack/README.md",
+                "backpack/workflow/main.py",
+            ],
         )
 
     def test_oversized_file_is_listed_but_not_downloadable(self):

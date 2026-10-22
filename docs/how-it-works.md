@@ -375,17 +375,18 @@ cluster, so it treats other websites in the same browser as hostile.
 - No inline scripts and no external assets (Content-Security-Policy `'self'`);
   the logo and all code ship inside the Python package.
 
-## 11. Safe file downloads
+## 11. Safe result inspection and downloads
 
-Files are downloaded one at a time from a finished or stopped run, over the
-existing connection.
+Files are listed, previewed, or downloaded from a finished or stopped run over
+the existing connection.
 
 ```text
  LIST_DOWNLOAD_FILES <run_dir>             (remote, read-only, Python)
    ├─ confirm <run_dir>/.floability-remote-run marker
    ├─ find the instance from "[floability] Created instance structure at: <path>"
    ├─ walk only allowed places, never following symlinks:
-   │     run command log · instance workflow/ · instance logs/ (top level)
+   │     source backpack/ · run command log · instance workflow/
+   │     instance logs/ except worker scratch
    │     catalog_update.json · metadata/ · metrics/
    ├─ skip pyuser/, logs/vine_factory_scratch/, symlinks, special files
    └─ return ≤ 2,000 entries (group, logical path, size)
@@ -399,8 +400,11 @@ existing connection.
    └─ stream raw bytes on stdout ──▶ local temporary file ──▶ atomic rename
 ```
 
-The file list is rebuilt before every download, so a file that changed or
-became a symlink after listing is refused. The CLI uses the same service:
+The file list is rebuilt before every read or download, so a file that changed
+or became a symlink after listing is refused. A text preview is limited to
+128 KB and rejects binary or non-UTF-8 content. Multi-file downloads preserve
+the listed paths in a new directory, refuse an existing destination, and cap
+the batch at 500 MiB. The CLI uses the same inventory and single-file service:
 
 ```bash
 floability-remote download --target <host> --run-dir <run_dir> --list-only

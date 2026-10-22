@@ -3,13 +3,19 @@ import io
 import importlib.util
 import unittest
 from contextlib import redirect_stdout
+from types import SimpleNamespace
+from unittest import mock
 
 from floability_remote.application.contracts import (
     InteractiveSessionResponse,
     InteractiveUrlResponse,
     RunResponse,
 )
-from floability_remote.agent.main import _session_notifier
+from floability_remote.agent.main import (
+    _compact_history,
+    _session_notifier,
+    _warn_unexecuted_tool_text,
+)
 
 
 AGENT_AVAILABLE = all(
@@ -19,6 +25,40 @@ AGENT_AVAILABLE = all(
 
 
 class SessionNotifierTests(unittest.IsolatedAsyncioTestCase):
+    def test_history_retains_only_complete_recent_turns(self):
+        def message(kind, value):
+            return SimpleNamespace(
+                value=value,
+                parts=[SimpleNamespace(part_kind=kind)],
+            )
+
+        history = [
+            message("user-prompt", "first"),
+            message("text", "first response"),
+            message("user-prompt", "second"),
+            message("tool-call", "tool"),
+            message("text", "second response"),
+            message("user-prompt", "third"),
+            message("text", "third response"),
+        ]
+
+        compacted = _compact_history(history, max_turns=2)
+
+        self.assertEqual(
+            [item.value for item in compacted],
+            ["second", "tool", "second response", "third", "third response"],
+        )
+
+    def test_textual_tool_call_is_reported_as_not_executed(self):
+        result = SimpleNamespace(
+            output="<function=get_status></function>",
+            usage=SimpleNamespace(tool_calls=0),
+        )
+        output = io.StringIO()
+        with mock.patch("sys.stderr", output):
+            _warn_unexecuted_tool_text(result)
+        self.assertIn("no tool was executed", output.getvalue())
+
     async def test_ready_url_is_printed_by_trusted_control_plane(self):
         class Client:
             def current_run(self):
@@ -103,6 +143,9 @@ class AgentRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "cancel_run",
                 "get_interactive_session",
                 "get_taskvine_status",
+                "list_run_files",
+                "read_run_file",
+                "download_run_files",
             },
         )
         self.assertIn("get_status", result.output)

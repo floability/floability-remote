@@ -9,6 +9,7 @@ from ...domain.config import (
     SUPPORTED_MODES,
 )
 from ...services.backpacks import vscode_available
+from .. import API_REVISION
 from ..schemas import DefaultsModel, FeatureModel, MetaResponse
 
 
@@ -48,6 +49,7 @@ def meta() -> MetaResponse:
     return MetaResponse(
         version=__version__,
         api_version="v1",
+        api_revision=API_REVISION,
         modes=list(SUPPORTED_MODES),
         batch_types=list(SUPPORTED_BATCH_TYPES),
         defaults=DefaultsModel(

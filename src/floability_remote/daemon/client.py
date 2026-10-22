@@ -24,6 +24,9 @@ from ..application.contracts import (
     DeploymentPlanRequest,
     DeploymentPlanResponse,
     FileListResponse,
+    RunFileContentResponse,
+    RunFilesDownloadRequest,
+    RunFilesDownloadResponse,
     InteractiveSessionResponse,
     InteractiveUrlResponse,
     RunRequest,
@@ -264,6 +267,38 @@ class DaemonClient:
     def list_files(self, run_id: str) -> FileListResponse:
         return FileListResponse.model_validate(
             self.request("GET", f"/runs/{run_id}/files")
+        )
+
+    def read_run_file(self, run_id: str, file_id: str) -> RunFileContentResponse:
+        try:
+            payload = self.request(
+                "GET", f"/runs/{run_id}/files/{file_id}/content"
+            )
+        except OperationError as error:
+            # A known run and file are handled by the route with specific error
+            # codes.  FastAPI's generic 404 means an older daemon lacks the
+            # route, usually because it survived an editable-package update.
+            if error.code == "not_found" and error.message == "Not Found":
+                raise OperationError(
+                    "daemon_update_required",
+                    "The running daemon does not provide file preview. Stop it "
+                    "with `floability-remote daemon stop` and retry so the "
+                    "updated daemon can start.",
+                    status=409,
+                ) from error
+            raise
+        return RunFileContentResponse.model_validate(payload)
+
+    def download_run_files(
+        self, run_id: str, request: RunFilesDownloadRequest
+    ) -> RunFilesDownloadResponse:
+        return RunFilesDownloadResponse.model_validate(
+            self.request(
+                "POST",
+                f"/runs/{run_id}/files/download",
+                request.model_dump(mode="json"),
+                timeout=600,
+            )
         )
 
     def taskvine_status(self, run_id: str) -> TaskVineStatusResponse:

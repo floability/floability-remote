@@ -13,6 +13,10 @@ from floability_remote.application.contracts import (
     DeploymentPlanResponse,
     IndexedEventModel,
     InteractiveSessionResponse,
+    FileListResponse,
+    RemoteFileModel,
+    RunFileContentResponse,
+    RunFilesDownloadResponse,
     RunEventPageResponse,
     RunResponse,
     TaskVineStatusResponse,
@@ -307,6 +311,48 @@ class MCPToolsTests(unittest.TestCase):
         self.assertEqual(taskvine.workers_connected, 2)
         client.get_interactive_session.assert_called_once_with("run-1")
         client.taskvine_status.assert_called_once_with("run-1")
+
+    def test_phase6_tools_list_read_and_download_selected_results(self):
+        client = mock.Mock()
+        file = RemoteFileModel(
+            id="file-1",
+            group="workflow",
+            path="workflow/result.csv",
+            size=9,
+            downloadable=True,
+        )
+        client.list_files.return_value = FileListResponse(
+            run_id="run-1", instance_found=True, truncated=False, files=[file]
+        )
+        client.read_run_file.return_value = RunFileContentResponse(
+            run_id="run-1",
+            file_id="file-1",
+            group="workflow",
+            path="workflow/result.csv",
+            size=9,
+            content="value,42\n",
+        )
+        client.download_run_files.return_value = RunFilesDownloadResponse(
+            run_id="run-1",
+            destination="/tmp/results",
+            file_count=1,
+            total_bytes=9,
+            files=[],
+        )
+        tools = MCPTools(client_factory=lambda kind, session: client)
+
+        self.assertEqual(tools.list_run_files("run-1").files[0].id, "file-1")
+        self.assertIn("42", tools.read_run_file("run-1", "file-1").content)
+        response = tools.download_run_files(
+            "run-1", "/tmp/results", file_ids=["file-1"]
+        )
+        self.assertEqual(response.file_count, 1)
+
+        client.list_files.assert_called_once_with("run-1")
+        client.read_run_file.assert_called_once_with("run-1", "file-1")
+        request = client.download_run_files.call_args.args[1]
+        self.assertEqual(request.file_ids, ["file-1"])
+        self.assertFalse(request.all_files)
 
 
 if __name__ == "__main__":

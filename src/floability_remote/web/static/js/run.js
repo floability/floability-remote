@@ -23,6 +23,7 @@ const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
 const FILE_GROUPS = {
   command: "Command log",
+  backpack: "Source backpack",
   workflow: "Workflow and results",
   logs: "Logs",
   records: "Run records",
@@ -303,7 +304,7 @@ export class RunPanel {
 
     const notes = [];
     if (!inventory.files.length) notes.push("No downloadable files were found.");
-    if (!inventory.instance_found) notes.push("No Floability instance was reported; only command logs are available.");
+    if (!inventory.instance_found) notes.push("No Floability instance was reported; the source backpack and command logs are available.");
     if (inventory.truncated) notes.push("The list was limited to 2,000 files.");
     this.filesStatus.textContent = notes.join(" ");
   }

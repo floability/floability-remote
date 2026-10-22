@@ -26,6 +26,16 @@ from ..validation import run_config_issues, validate_run_config
 from . import ClientContext
 
 
+def _entrypoint_mode(entrypoint: str) -> str:
+    """Return the only supported deployment mode for a known entrypoint."""
+    suffix = entrypoint.lower()
+    if suffix.endswith(".ipynb"):
+        return "run"
+    if suffix.endswith((".py", ".sh")):
+        return "execute"
+    return ""
+
+
 def _inspection(snapshot: SourceSnapshot) -> BackpackInspectionResponse:
     report = snapshot.inspection
     return BackpackInspectionResponse(
@@ -173,7 +183,7 @@ def validate_plan(
         ),
         source.effective,
     )
-    issues = list(run_config_issues(config))
+    issues = []
 
     if not runtime.planning.source_is_fresh(request.source_id):
         issues.append(
@@ -209,6 +219,28 @@ def validate_plan(
                     "is required because no .ipynb, .py, or .sh workflow file was found.",
                 )
             )
+
+    expected_mode = _entrypoint_mode(config.entrypoint)
+    if expected_mode and not config.mode:
+        config = replace(config, mode=expected_mode)
+    elif expected_mode and config.mode != expected_mode:
+        issues.append(
+            ValidationIssue(
+                "mode",
+                f"must be '{expected_mode}' for the selected "
+                f"{config.entrypoint.rsplit('.', 1)[-1]} entrypoint.",
+            )
+        )
+
+    structural_issues = list(run_config_issues(config))
+    # When entrypoint selection is unresolved, mode inference is unresolved as
+    # well.  Report the actionable entrypoint problem rather than a second
+    # consequence of it.
+    if not config.mode and not config.entrypoint:
+        structural_issues = [
+            issue for issue in structural_issues if issue.field != "mode"
+        ]
+    issues = structural_issues + issues
 
     with runtime.audit.operation(
         "deployment.validate_plan",

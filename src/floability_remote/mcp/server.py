@@ -14,8 +14,11 @@ from ..application.contracts import (
     ClusterCheckResponse,
     ConnectionResponse,
     DeploymentPlanResponse,
+    FileListResponse,
     FloabilityOptionModel,
     InteractiveSessionResponse,
+    RunFileContentResponse,
+    RunFilesDownloadResponse,
     RunEventPageResponse,
     RunResponse,
     TaskVineStatusResponse,
@@ -128,8 +131,8 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     @tool_errors
     def validate_deployment(
         source_id: str,
-        mode: Literal["run", "execute"],
-        batch_type: Literal["local", "slurm", "condor", "uge"],
+        mode: Optional[Literal["run", "execute"]] = None,
+        batch_type: Literal["local", "slurm", "condor", "uge"] = "local",
         entrypoint: str = "",
         env_name: str = DEFAULT_ENV_NAME,
         floability_version: str = "",
@@ -142,7 +145,7 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
         local_port: Optional[int] = None,
         floability_options: Optional[List[FloabilityOptionModel]] = None,
     ) -> DeploymentPlanResponse:
-        """Validate settings and return a plan ID; this never starts a deployment."""
+        """Validate settings and return a plan ID; mode can be inferred."""
         return facade.validate_deployment(
             source_id,
             mode,
@@ -220,6 +223,31 @@ def create_server(tools: Optional[MCPTools] = None) -> MCPServer:
     def get_taskvine_status(run_id: str) -> TaskVineStatusResponse:
         """Get TaskVine manager, worker, task, and factory status for a run."""
         return facade.get_taskvine_status(run_id)
+
+    @server.tool(annotations=REMOTE_READ_ONLY)
+    @tool_errors
+    def list_run_files(run_id: str) -> FileListResponse:
+        """List safe files from a completed run's source backpack and instance."""
+        return facade.list_run_files(run_id)
+
+    @server.tool(annotations=REMOTE_READ_ONLY)
+    @tool_errors
+    def read_run_file(run_id: str, file_id: str) -> RunFileContentResponse:
+        """Read one listed UTF-8 file up to 128 KB for inspection or summarization."""
+        return facade.read_run_file(run_id, file_id)
+
+    @server.tool(annotations=STATE_CHANGE)
+    @tool_errors
+    def download_run_files(
+        run_id: str,
+        destination: str,
+        file_ids: Optional[List[str]] = None,
+        all_files: bool = False,
+    ) -> RunFilesDownloadResponse:
+        """Download selected IDs, or all allowed files, into a new local directory."""
+        return facade.download_run_files(
+            run_id, destination, file_ids=file_ids, all_files=all_files
+        )
 
     return server
 

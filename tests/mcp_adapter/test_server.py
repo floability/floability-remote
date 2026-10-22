@@ -65,6 +65,9 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
                     "cancel_run",
                     "get_interactive_session",
                     "get_taskvine_status",
+                    "list_run_files",
+                    "read_run_file",
+                    "download_run_files",
                 },
             )
             self.assertTrue(tools["get_status"].annotations.read_only_hint)
@@ -75,6 +78,9 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(tools["wait_for_run"].annotations.read_only_hint)
             self.assertTrue(tools["get_interactive_session"].annotations.read_only_hint)
             self.assertTrue(tools["get_taskvine_status"].annotations.read_only_hint)
+            self.assertTrue(tools["list_run_files"].annotations.read_only_hint)
+            self.assertTrue(tools["read_run_file"].annotations.read_only_hint)
+            self.assertFalse(tools["download_run_files"].annotations.read_only_hint)
             self.assertEqual(
                 set(tools["connect_remote"].input_schema["properties"]),
                 {"target", "identity_file"},
@@ -89,7 +95,15 @@ class MCPServerTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(wait_properties["timeout_seconds"]["maximum"], 30)
             self.assertEqual(wait_properties["limit"]["maximum"], 200)
             validation = tools["validate_deployment"].input_schema["properties"]
-            self.assertEqual(validation["mode"]["enum"], ["run", "execute"])
+            self.assertNotIn(
+                "mode", tools["validate_deployment"].input_schema.get("required", [])
+            )
+            mode_values = next(
+                option["enum"]
+                for option in validation["mode"]["anyOf"]
+                if "enum" in option
+            )
+            self.assertEqual(mode_values, ["run", "execute"])
             self.assertEqual(
                 validation["batch_type"]["enum"],
                 ["local", "slurm", "condor", "uge"],

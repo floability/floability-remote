@@ -205,10 +205,11 @@ Every invocation currently retains:
 └── .floability-remote-run
 ```
 
-The CLI and web API can list and download individual retained workflow, log,
-metadata, and metrics files. They exclude symlinks and generated runtime
-infrastructure and apply file-count and size limits. Automatic, multi-file, and
-large-result transfers are not implemented yet.
+The clients can list the retained source backpack and selected instance files,
+preview small UTF-8 files, and download one or several results. They exclude
+symlinks and generated runtime infrastructure and apply file-count, per-file,
+and batch-size limits. Resumable and large-result transfers are not implemented
+yet.
 
 ## Shared implementation requirements
 

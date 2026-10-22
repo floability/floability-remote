@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 from ..domain.errors import RemoteRunError
 from ..remote import scripts as remote_scripts
@@ -17,9 +17,12 @@ from ..remote.ssh import SSHSession
 
 
 MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
-GROUP_ORDER = ("command", "workflow", "logs", "records")
+MAX_PREVIEW_BYTES = 128 * 1024
+MAX_BATCH_DOWNLOAD_BYTES = 500 * 1024 * 1024
+GROUP_ORDER = ("command", "backpack", "workflow", "logs", "records")
 GROUP_LABELS = {
     "command": "Command log",
+    "backpack": "Source backpack",
     "workflow": "Workflow and results",
     "logs": "Logs",
     "records": "Run records",
@@ -62,6 +65,26 @@ class FileInventory:
     instance_found: bool
     truncated: bool
     python_path: str
+
+
+@dataclass(frozen=True)
+class FilePreview:
+    """Small UTF-8 file content suitable for display or model summarization."""
+
+    file: RemoteFile
+    content: str
+
+
+@dataclass(frozen=True)
+class DownloadBatch:
+    """Files copied into one newly-created local result directory."""
+
+    files: Tuple[RemoteFile, ...]
+    destination: Path
+
+    @property
+    def total_bytes(self) -> int:
+        return sum(item.size for item in self.files)
 
 
 def format_size(size: int) -> str:
@@ -184,6 +207,129 @@ class FileService:
         finally:
             temporary.unlink(missing_ok=True)
         return item
+
+    def preview(self, run_dir: str, selector: str) -> FilePreview:
+        """Read one small UTF-8 file without retaining a local copy."""
+        inventory = self.list_files(run_dir)
+        item = select_file(inventory, selector)
+        if item.size > MAX_PREVIEW_BYTES:
+            raise RemoteRunError(
+                f"File is larger than the {format_size(MAX_PREVIEW_BYTES)} "
+                "text preview limit; download it instead."
+            )
+        directory = Path(tempfile.mkdtemp(prefix="floability-remote-preview-"))
+        temporary = directory / "payload"
+        try:
+            self._download_item(item, inventory, temporary)
+            payload = temporary.read_bytes()
+            if b"\x00" in payload:
+                raise RemoteRunError(
+                    "The selected file appears to be binary and cannot be previewed."
+                )
+            try:
+                content = payload.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise RemoteRunError(
+                    "The selected file is not valid UTF-8 and cannot be previewed."
+                ) from error
+            return FilePreview(file=item, content=content)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def download_many(
+        self,
+        run_dir: str,
+        selectors: Iterable[str],
+        destination: Path,
+        *,
+        all_files: bool = False,
+    ) -> DownloadBatch:
+        """Copy selected files into a new local directory.
+
+        Logical paths are preserved so files with the same basename never
+        overwrite each other. The destination must not already exist.
+        """
+        inventory = self.list_files(run_dir)
+        requested = tuple(selectors)
+        if all_files and requested:
+            raise RemoteRunError("Choose file IDs or all files, not both.")
+        if all_files:
+            if inventory.truncated:
+                raise RemoteRunError(
+                    "The remote inventory was truncated; select explicit file IDs "
+                    "instead of requesting all files."
+                )
+            items = tuple(item for item in inventory.files if item.downloadable)
+        else:
+            if not requested:
+                raise RemoteRunError("Select at least one file to download.")
+            selected = []
+            seen = set()
+            for selector in requested:
+                item = select_file(inventory, selector)
+                if item.id not in seen:
+                    selected.append(item)
+                    seen.add(item.id)
+            items = tuple(selected)
+        if not items:
+            raise RemoteRunError("This run has no files within the download limit.")
+        total_bytes = sum(item.size for item in items)
+        if total_bytes > MAX_BATCH_DOWNLOAD_BYTES:
+            raise RemoteRunError(
+                f"Selected files exceed the {format_size(MAX_BATCH_DOWNLOAD_BYTES)} "
+                "batch download limit. Choose a smaller set."
+            )
+
+        destination = Path(destination).expanduser()
+        if destination.exists():
+            raise RemoteRunError(f"Local destination already exists: {destination}")
+        if not destination.parent.is_dir():
+            raise RemoteRunError(
+                f"Local destination directory does not exist: {destination.parent}"
+            )
+        staging = destination.with_name(
+            f".{destination.name}.floability-remote-{uuid.uuid4().hex}.part"
+        )
+        destination_created = False
+        try:
+            staging.mkdir(mode=0o700)
+            for item in items:
+                relative = PurePosixPath(item.path)
+                target = staging.joinpath(*relative.parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                self._download_item(item, inventory, target)
+            destination.mkdir(mode=0o700)
+            destination_created = True
+            for child in staging.iterdir():
+                os.replace(child, destination / child.name)
+        except Exception:
+            if destination_created:
+                shutil.rmtree(destination, ignore_errors=True)
+            raise
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        return DownloadBatch(files=items, destination=destination)
+
+    def _download_item(
+        self, item: RemoteFile, inventory: FileInventory, destination: Path
+    ) -> None:
+        """Download an already inventoried item to a non-existent path."""
+        temporary = destination.with_name(
+            f".{destination.name}.floability-remote-{uuid.uuid4().hex}.part"
+        )
+        try:
+            self.session.run_script_to_file(
+                remote_scripts.DOWNLOAD_FILE,
+                (
+                    item.remote_path,
+                    str(MAX_DOWNLOAD_BYTES),
+                    inventory.python_path,
+                ),
+                temporary,
+            )
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def download_temporary(
         self, run_dir: str, selector: str

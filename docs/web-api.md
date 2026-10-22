@@ -287,7 +287,9 @@ and closes the connection.
 | `GET /api/v1/runs/{id}/interactive/url` | Trusted authenticated local-control response containing the working Jupyter URL while ready. Not exposed through MCP. |
 | `GET /api/v1/runs/{id}/events` | Server-Sent Events (below). |
 | `GET /api/v1/runs/{id}/files` | Approved regular files retained by a finished run. Requires the matching SSH connection. |
+| `GET /api/v1/runs/{id}/files/{file_id}/content` | Revalidate and return one UTF-8 file up to 128 KB for inspection. |
 | `GET /api/v1/runs/{id}/files/{file_id}/download` | Revalidate and download one listed file. |
+| `POST /api/v1/runs/{id}/files/download` | Copy selected file IDs, or all downloadable files, into a new daemon-local directory. The destination must not exist. |
 | `GET /api/v1/runs/{id}/taskvine` | Live TaskVine summary for the run: `manager_state` (`not_started`, `running`, `ended`), worker and task counts, the factory's latest submission counts, and the eight most recent events. `available` is false until the run has a remote directory. `uses_taskvine` is true only once the workflow has started a TaskVine manager (`MANAGER … START` in the transactions log); clients should show TaskVine activity only then, because many backpacks never start one. Requires the matching SSH connection. |
 | `POST /api/v1/runs/{id}/cancel` | `202`; cancels an execution or stops an interactive session. Cleanup progress arrives as events. |
 | `POST /api/v1/runs/{id}/confirmations/{id}` | `{"approved": true}` → `204`. |
@@ -333,16 +335,19 @@ session. There is no idle timeout yet.
 `GET /runs/{id}/files` is available after the run reaches a terminal state. It
 returns `instance_found`, `truncated`, and file records containing `id`,
 `group`, `path`, `size`, `downloadable`, and an optional `reason`. Groups are
-`command`, `workflow`, `logs`, and `records`.
+`command`, `backpack`, `workflow`, `logs`, and `records`.
 
-The inventory includes the Floability Remote command log, regular workflow
-files, direct children of the instance log directory, `catalog_update.json`,
-and regular metadata and metrics files. It does not follow or expose symbolic
-links, environments, data caches, `pyuser`, or `vine_factory_scratch`.
+The inventory includes the Floability Remote command log, regular source
+backpack and workflow files, regular files under the instance log directory,
+`catalog_update.json`, and regular metadata and metrics files. It does not
+follow or expose symbolic links, environments, data caches, `pyuser`, `.git`,
+`.venv`, `__pycache__`, or `vine_factory_scratch`.
 Workflow `vine-run-info` and `.ipynb_checkpoints` directories are also omitted.
 Downloads use the opaque `id` returned by the inventory and re-run discovery
 before opening the file with no-follow protection. The first version limits an
-inventory to 2,000 files and each download to 100 MiB.
+inventory to 2,000 files, each file to 100 MiB, text previews to 128 KB, and a
+selected batch to 500 MiB. Batch downloads preserve logical paths inside a new
+local directory and refuse an existing destination.
 
 The local daemon reuses its open SSH master. The standalone CLI equivalent is:
 

@@ -27,6 +27,7 @@ class DefaultsModel(BaseModel):
 class MetaResponse(BaseModel):
     version: str
     api_version: str
+    api_revision: int
     modes: List[str]
     batch_types: List[str]
     defaults: DefaultsModel

@@ -7,6 +7,7 @@ from pathlib import Path
 from floability_remote import __version__
 from floability_remote.cli import build_parser, cli_arguments, validate_args
 from floability_remote.domain.config import SUPPORTED_BATCH_TYPES, SUPPORTED_MODES
+from floability_remote.daemon import API_REVISION
 
 from .support import make_client, requires_web, run_request
 
@@ -24,6 +25,7 @@ class SystemEndpointTests(unittest.TestCase):
     def test_meta_uses_shared_configuration(self):
         meta = self.client.get("/api/v1/meta").json()
         self.assertEqual(meta["api_version"], "v1")
+        self.assertEqual(meta["api_revision"], API_REVISION)
         self.assertEqual(meta["modes"], list(SUPPORTED_MODES))
         self.assertEqual(meta["batch_types"], list(SUPPORTED_BATCH_TYPES))
         self.assertEqual(meta["defaults"]["env_name"], "floability-remote-managed")
@@ -45,6 +47,9 @@ class SystemEndpointTests(unittest.TestCase):
         self.assertIn("/api/v1/runs/validate", schema["paths"])
         self.assertIn("/api/v1/cluster/check", schema["paths"])
         self.assertIn("/api/v1/runs/{run_id}/files", schema["paths"])
+        self.assertIn(
+            "/api/v1/runs/{run_id}/files/{file_id}/content", schema["paths"]
+        )
         self.assertEqual(self.client.get("/docs").status_code, 404)
 
     def test_unknown_route_uses_error_envelope(self):

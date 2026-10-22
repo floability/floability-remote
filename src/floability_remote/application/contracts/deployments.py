@@ -88,7 +88,10 @@ class RunRequest(StrictModel):
 
 class DeploymentPlanRequest(StrictModel):
     source_id: str
-    mode: str
+    # Empty means derive the mode from the selected entrypoint.  This keeps
+    # interface adapters from guessing: notebooks run interactively, while
+    # scripts execute to completion.
+    mode: str = ""
     batch_type: str
     environment: EnvironmentModel = Field(default_factory=EnvironmentModel)
     entrypoint: str = ""

@@ -21,6 +21,36 @@ class FileListResponse(BaseModel):
     files: List[RemoteFileModel]
 
 
+class RunFileContentResponse(BaseModel):
+    run_id: str
+    file_id: str
+    group: str
+    path: str
+    size: int
+    content: str
+
+
+class RunFilesDownloadRequest(BaseModel):
+    destination: str = Field(min_length=1)
+    file_ids: List[str] = Field(default_factory=list, max_length=2000)
+    all_files: bool = False
+
+
+class DownloadedFileModel(BaseModel):
+    file_id: str
+    path: str
+    size: int
+    local_path: str
+
+
+class RunFilesDownloadResponse(BaseModel):
+    run_id: str
+    destination: str
+    file_count: int
+    total_bytes: int
+    files: List[DownloadedFileModel]
+
+
 class FactoryStatusModel(BaseModel):
     at: str
     submitted: int

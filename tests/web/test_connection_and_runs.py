@@ -392,7 +392,7 @@ class ConnectionAndRunApiTests(unittest.TestCase):
             paths = [item["path"] for item in inventory["files"]]
             self.assertEqual(
                 paths,
-                ["execute-command.log", "logs/workflow.log", "workflow/result.csv"],
+                ["execute-command.log", "workflow/result.csv", "logs/workflow.log"],
             )
 
             result = next(
@@ -406,6 +406,36 @@ class ConnectionAndRunApiTests(unittest.TestCase):
             self.assertEqual(download.status_code, 200, download.text)
             self.assertEqual(download.content, b"value,42\n")
             self.assertIn("result.csv", download.headers["content-disposition"])
+
+            # Every text file ID returned by the inventory must resolve through
+            # the content endpoint.  This catches list/read contract drift.
+            for listed in inventory["files"]:
+                content = self.client.get(
+                    f"/api/v1/runs/{run['id']}/files/{listed['id']}/content"
+                )
+                self.assertEqual(content.status_code, 200, content.text)
+                self.assertEqual(content.json()["file_id"], listed["id"])
+            self.assertEqual(
+                self.client.get(
+                    f"/api/v1/runs/{run['id']}/files/{result['id']}/content"
+                ).json()["content"],
+                "value,42\n",
+            )
+
+            destination = root / "downloaded-results"
+            batch = self.client.post(
+                f"/api/v1/runs/{run['id']}/files/download",
+                json={
+                    "destination": str(destination),
+                    "file_ids": [result["id"]],
+                },
+            )
+            self.assertEqual(batch.status_code, 200, batch.text)
+            self.assertEqual(batch.json()["file_count"], 1)
+            self.assertEqual(
+                (destination / "workflow" / "result.csv").read_bytes(),
+                b"value,42\n",
+            )
 
             missing = self.client.get(
                 f"/api/v1/runs/{run['id']}/files/not-a-file/download"

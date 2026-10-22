@@ -82,6 +82,9 @@ the terminal, and leaves the connection open for MCP tools. Close it with
 | `cancel_run` | Requests cancellation through Floability's existing remote cleanup path. |
 | `get_interactive_session` | Reports model-safe Jupyter and tunnel readiness. It never returns the token-bearing URL. |
 | `get_taskvine_status` | Reports live TaskVine manager, worker, task, and factory state for the run. |
+| `list_run_files` | Lists allowed regular files from a completed run's retained source backpack and materialized instance. |
+| `read_run_file` | Reads one listed UTF-8 file up to 128 KB for inspection or summarization. |
+| `download_run_files` | Copies selected file IDs, or all downloadable files, into a new local directory without overwriting it. |
 
 Inspection, planning, status, and progress tools are marked read-only.
 Connection changes, starting, confirmations, and cancellation are marked
@@ -98,7 +101,7 @@ claude mcp add floability-remote -- \
   /ABSOLUTE/PATH/floability-remote/.venv/bin/floability-remote mcp
 ```
 
-Then use `/mcp` inside Claude Code to confirm the eighteen tools are available.
+Then use `/mcp` inside Claude Code to confirm the twenty-one tools are available.
 
 ## Codex
 
@@ -141,7 +144,7 @@ npx -y @modelcontextprotocol/inspector --cli \
 
 The checklist is:
 
-- all eighteen tools are listed with structured output schemas;
+- all twenty-one tools are listed with structured output schemas;
 - status and readiness tools are marked read-only, while connection changes
   are marked state-changing;
 - strict schema validation exits successfully;

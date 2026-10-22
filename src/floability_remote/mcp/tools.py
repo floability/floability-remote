@@ -6,20 +6,24 @@ from typing import Callable, List, Literal, Optional
 
 from .. import __version__
 from ..application.contracts import (
-    ClusterCheckRequest,
-    ClusterCheckResponse,
     BackpackFileListResponse,
     BackpackFileResponse,
     BackpackSourceCheckResponse,
     BackpackSourceRequest,
     BackpackSourceResponse,
+    ClusterCheckRequest,
+    ClusterCheckResponse,
     ConnectionResponse,
     ConnectRequest,
     DeploymentPlanRequest,
     DeploymentPlanResponse,
     EnvironmentModel,
+    FileListResponse,
     FloabilityOptionModel,
     InteractiveSessionResponse,
+    RunFileContentResponse,
+    RunFilesDownloadRequest,
+    RunFilesDownloadResponse,
     RunEventPageResponse,
     RunResponse,
     TaskVineStatusResponse,
@@ -171,8 +175,8 @@ class MCPTools:
     def validate_deployment(
         self,
         source_id: str,
-        mode: Literal["run", "execute"],
-        batch_type: Literal["local", "slurm", "condor", "uge"],
+        mode: Optional[Literal["run", "execute"]] = None,
+        batch_type: Literal["local", "slurm", "condor", "uge"] = "local",
         entrypoint: str = "",
         env_name: str = DEFAULT_ENV_NAME,
         floability_version: str = "",
@@ -185,11 +189,15 @@ class MCPTools:
         local_port: Optional[int] = None,
         floability_options: Optional[List[FloabilityOptionModel]] = None,
     ) -> DeploymentPlanResponse:
-        """Validate a deployment and create a plan ID without starting it."""
+        """Validate a deployment and create a plan ID without starting it.
+
+        Omit mode to derive it from the entrypoint: .py/.sh use execute and
+        .ipynb uses run. Pass mode only when the user explicitly selected it.
+        """
         return self._client().validate_deployment_plan(
             DeploymentPlanRequest(
                 source_id=source_id,
-                mode=mode,
+                mode=mode or "",
                 batch_type=batch_type,
                 entrypoint=entrypoint,
                 environment=EnvironmentModel(
@@ -266,6 +274,31 @@ class MCPTools:
     def get_taskvine_status(self, run_id: str) -> TaskVineStatusResponse:
         """Return a live TaskVine manager, worker, task, and factory snapshot."""
         return self._client().taskvine_status(run_id)
+
+    def list_run_files(self, run_id: str) -> FileListResponse:
+        """List safe source-backpack, instance, log, and metadata files for a run."""
+        return self._client().list_files(run_id)
+
+    def read_run_file(self, run_id: str, file_id: str) -> RunFileContentResponse:
+        """Read one small UTF-8 run file so its contents can be summarized."""
+        return self._client().read_run_file(run_id, file_id)
+
+    def download_run_files(
+        self,
+        run_id: str,
+        destination: str,
+        file_ids: Optional[List[str]] = None,
+        all_files: bool = False,
+    ) -> RunFilesDownloadResponse:
+        """Copy selected files, or all allowed files, into a new local directory."""
+        return self._client().download_run_files(
+            run_id,
+            RunFilesDownloadRequest(
+                destination=destination,
+                file_ids=file_ids or [],
+                all_files=all_files,
+            ),
+        )
 
     @staticmethod
     def _safe_run(run: RunResponse) -> RunResponse:

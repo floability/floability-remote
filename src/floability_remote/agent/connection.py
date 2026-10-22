@@ -36,6 +36,16 @@ class ConnectionPromptRelay:
         self.output = output or sys.stderr
         self.poll_interval = poll_interval
         self._handled_prompt = ""
+        self._authorized_target = ""
+
+    def before_tool_call(self, name: str, arguments: dict) -> None:
+        """Authorize prompt relay only after the host approved a connection."""
+        if name == "connect_remote":
+            self._authorized_target = str(arguments.get("target", ""))
+            self._handled_prompt = ""
+        elif name == "disconnect_remote":
+            self._authorized_target = ""
+            self._handled_prompt = ""
 
     async def run(self, stop: asyncio.Event) -> None:
         """Relay prompts until `stop` is set; daemon failures remain non-fatal."""
@@ -50,7 +60,10 @@ class ConnectionPromptRelay:
                 continue
 
             prompt = connection.prompt
-            if prompt is None:
+            authorized = bool(self._authorized_target) and (
+                connection.target == self._authorized_target
+            )
+            if prompt is None or not authorized:
                 self._handled_prompt = ""
             elif prompt.id != self._handled_prompt:
                 self._handled_prompt = prompt.id

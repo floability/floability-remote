@@ -26,7 +26,10 @@ def print_inventory(inventory: FileInventory) -> List:
             else:
                 print(f"    - {item.path}  ({format_size(item.size)}; {item.reason})")
     if not inventory.instance_found:
-        print("\nThe run did not report a Floability instance; only command logs are shown.")
+        print(
+            "\nThe run did not report a Floability instance; only the source "
+            "backpack and command logs are shown."
+        )
     if inventory.truncated:
         print("\nWarning: the remote file list was limited to 2,000 files.")
     return selectable

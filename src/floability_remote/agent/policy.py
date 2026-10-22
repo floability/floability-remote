@@ -15,13 +15,15 @@ DEFAULT_APPROVAL_TOOLS = frozenset(
         "start_deployment",
         "cancel_run",
         "answer_confirmation",
-        "download_file",
+        "read_run_file",
+        "download_run_files",
         "apply_repair",
     }
 )
 
 ToolCall = Callable[[str, Dict[str, Any]], Awaitable[Any]]
 InputFunction = Callable[[str], str]
+BeforeCall = Callable[[str, Dict[str, Any]], None]
 
 
 class ApprovalPolicy:
@@ -31,6 +33,7 @@ class ApprovalPolicy:
         approval_tools: Optional[Iterable[str]] = None,
         input_function: InputFunction = input,
         output: Optional[TextIO] = None,
+        before_call: Optional[BeforeCall] = None,
     ):
         import sys
 
@@ -41,6 +44,7 @@ class ApprovalPolicy:
         self.approval_tools = frozenset(selected_tools)
         self.input_function = input_function
         self.output = output or sys.stderr
+        self.before_call = before_call
 
     async def process_tool_call(
         self,
@@ -64,5 +68,7 @@ class ApprovalPolicy:
                     "denied": True,
                     "message": "The user denied this action. Ask what to do next.",
                 }
+        if self.before_call is not None:
+            self.before_call(name, arguments)
         print(f"[tool] {name} {visible_arguments}", file=self.output)
         return await call_tool(name, arguments)

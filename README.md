@@ -203,7 +203,9 @@ floability-remote mcp
 The MCP tools can inspect status, manage a daemon-owned SSH connection, check
 remote readiness, inspect Git/local/ZIP backpacks, safely preview their files,
 validate execute or interactive deployment plans, start and monitor them, and
-report TaskVine activity.
+report TaskVine activity. After completion, they can list the retained source
+backpack and instance files, preview small text files for summarization, and
+download selected files or the full allowed inventory.
 Runs return immediately with a `run_id`; bounded cursor-based calls report
 redacted progress, pending confirmations, completion, and retained remote
 paths. The MCP process does not own SSH or deployment state; it calls the
@@ -245,7 +247,7 @@ floability-remote agent --prompt "Check Floability Remote status."
 ```
 
 The agent can connect, inspect a backpack, prepare a validated plan, and run
-an execute-mode workflow:
+execute-mode or interactive workflows:
 
 ```text
 Connect to <USER@LOGIN_NODE>, inspect
@@ -254,9 +256,11 @@ prepare an execute-mode deployment using Slurm, start it, and monitor it
 until it finishes.
 ```
 
-The terminal asks for approval before starting, answering an installation
-question, cancelling, connecting, or disconnecting. Interactive Jupyter runs
-are not available through the agent yet.
+After a run finishes, you can ask the agent to list its files, summarize a
+specific text result, or download selected files into a new local directory.
+The terminal asks for approval before reading remote file content, downloading,
+starting, answering an installation question, cancelling, connecting, or
+disconnecting.
 
 Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` before selecting the corresponding
 hosted provider. The agent asks for terminal approval before connecting or
@@ -460,8 +464,9 @@ The CLI and web interface use the same file-inventory and transfer service.
 For a finished run they expose:
 
 - `run-command.log` or `execute-command.log`;
+- regular files from the retained source `backpack/`;
 - regular files under the Floability instance's `workflow/`;
-- regular files directly under `logs/`;
+- regular files under `logs/` except worker scratch space;
 - `catalog_update.json`; and
 - regular files under `metadata/` and `metrics/`.
 
@@ -469,8 +474,10 @@ The instance directory is read from Floability's creation message in the
 command log. Symbolic links, `pyuser/`, `vine_factory_scratch/`,
 `vine-run-info/`, `.ipynb_checkpoints/`, environments, data caches,
 directories, and special files are never offered. A listing is limited to
-2,000 files, and an individual download to 100 MiB. Larger and multi-file
-transfers are deferred to a later version.
+2,000 files, an individual file to 100 MiB, and a batch to 500 MiB. The agent
+can copy selected files or all downloadable files into a new directory without
+overwriting an existing destination. Resumable and larger transfers remain
+future work.
 
 ## TaskVine activity
 
@@ -553,8 +560,8 @@ factories, and batch jobs have stopped.
 
 ## Current limitations
 
-- Individual retained files can be downloaded explicitly; automatic,
-  multi-file, and large-result transfers are not implemented yet.
+- Downloads are capped at 100 MiB per file and 500 MiB per batch; resumable
+  and large-result transfers are not implemented yet.
 - Interactive mode parses Floability's current human-readable Jupyter output.
 - Jupyter is expected to run on the login node where Floability is launched.
 - Detached sessions and reconnecting to an existing run are not supported.

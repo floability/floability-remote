@@ -61,6 +61,40 @@ class ApprovalPolicyTests(unittest.IsolatedAsyncioTestCase):
             "started",
         )
 
+    async def test_before_call_runs_only_after_approval(self):
+        observed = []
+
+        async def call(name, arguments):
+            observed.append(("called", name, arguments))
+            return "ok"
+
+        denied = ApprovalPolicy(
+            approval_tools={"connect_remote"},
+            input_function=lambda prompt: "no",
+            output=io.StringIO(),
+            before_call=lambda name, arguments: observed.append(
+                ("authorized", name, arguments)
+            ),
+        )
+        await denied.process_tool_call(
+            None, call, "connect_remote", {"target": "user@host"}
+        )
+        self.assertEqual(observed, [])
+
+        approved = ApprovalPolicy(
+            approval_tools={"connect_remote"},
+            input_function=lambda prompt: "yes",
+            output=io.StringIO(),
+            before_call=lambda name, arguments: observed.append(
+                ("authorized", name, arguments)
+            ),
+        )
+        await approved.process_tool_call(
+            None, call, "connect_remote", {"target": "user@host"}
+        )
+        self.assertEqual(observed[0][0], "authorized")
+        self.assertEqual(observed[1][0], "called")
+
     async def test_visible_arguments_are_redacted_but_server_receives_original(self):
         output = io.StringIO()
         received = None
@@ -101,7 +135,13 @@ class ApprovalPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("inspect_backpack", output.getvalue())
 
     async def test_phase4_state_changes_use_default_approval(self):
-        for tool in ("start_deployment", "answer_confirmation", "cancel_run"):
+        for tool in (
+            "start_deployment",
+            "answer_confirmation",
+            "cancel_run",
+            "read_run_file",
+            "download_run_files",
+        ):
             with self.subTest(tool=tool):
                 called = False
 

@@ -1,5 +1,7 @@
 import unittest
+from unittest import mock
 
+from floability_remote.application.errors import OperationError
 from floability_remote.daemon.client import DaemonClient
 from floability_remote.daemon.session import DaemonDescriptor
 
@@ -46,6 +48,30 @@ class RecordingClient(DaemonClient):
                 "url_available": True,
                 "message": "ready",
                 "cancel_requested": False,
+            }
+        if path.endswith("/files/file-1/content"):
+            return {
+                "run_id": "run-1",
+                "file_id": "file-1",
+                "group": "workflow",
+                "path": "workflow/result.csv",
+                "size": 9,
+                "content": "value,42\n",
+            }
+        if path.endswith("/files/download"):
+            return {
+                "run_id": "run-1",
+                "destination": "/tmp/results",
+                "file_count": 1,
+                "total_bytes": 9,
+                "files": [],
+            }
+        if path.endswith("/files"):
+            return {
+                "run_id": "run-1",
+                "instance_found": True,
+                "truncated": False,
+                "files": [],
             }
         if path.endswith("/event-page?cursor=4&limit=12&include_logs=true"):
             return {
@@ -112,6 +138,41 @@ class DaemonClientPhase4Tests(unittest.TestCase):
         self.assertIn("token=private", trusted.url)
         self.assertEqual(client.calls[0][:2], ("GET", "/runs/run-1/interactive"))
         self.assertEqual(client.calls[1][:2], ("GET", "/runs/run-1/interactive/url"))
+
+    def test_result_list_read_and_batch_download_paths(self):
+        from floability_remote.application.contracts import RunFilesDownloadRequest
+
+        client = RecordingClient()
+
+        self.assertTrue(client.list_files("run-1").instance_found)
+        self.assertIn("42", client.read_run_file("run-1", "file-1").content)
+        response = client.download_run_files(
+            "run-1",
+            RunFilesDownloadRequest(
+                destination="/tmp/results", file_ids=["file-1"]
+            ),
+        )
+
+        self.assertEqual(response.file_count, 1)
+        self.assertEqual(client.calls[0][:2], ("GET", "/runs/run-1/files"))
+        self.assertEqual(
+            client.calls[1][:2], ("GET", "/runs/run-1/files/file-1/content")
+        )
+        self.assertEqual(client.calls[2][0:2], ("POST", "/runs/run-1/files/download"))
+        self.assertEqual(client.calls[2][2]["file_ids"], ["file-1"])
+        self.assertEqual(client.calls[2][3], 600)
+
+    def test_missing_preview_route_is_reported_as_a_stale_daemon(self):
+        client = RecordingClient()
+        with mock.patch.object(
+            client,
+            "request",
+            side_effect=OperationError("not_found", "Not Found", status=404),
+        ):
+            with self.assertRaisesRegex(OperationError, "updated daemon") as raised:
+                client.read_run_file("run-1", "file-1")
+
+        self.assertEqual(raised.exception.code, "daemon_update_required")
 
 
 if __name__ == "__main__":

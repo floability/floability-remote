@@ -194,22 +194,23 @@ remote process running; use an explicit lifecycle and idle policy.
 Success condition: a user launches an interactive backpack, opens Jupyter in
 the browser, and stops the run cleanly without entering an SSH command.
 
-### 5. Add run history and file transfer (single-file download implemented)
+### 5. Add run history and file transfer (safe download core implemented)
 
 The first M5 slice is available in both clients. After a run ends, it lists
-approved regular files from the workflow, top-level instance logs, metadata,
-metrics, and the Floability Remote command log. Symbolic links and generated
-software or worker scratch directories are excluded. The web page provides a
-Download button for each file; `floability-remote download` provides the same
-inventory in the terminal. Each file is revalidated before transfer, local
-files are not overwritten, listings are limited to 2,000 files, and downloads
-to 100 MiB.
+approved regular files from the source backpack, workflow, top-level instance
+logs, metadata, metrics, and the Floability Remote command log. Symbolic links
+and generated software or worker scratch directories are excluded. The web
+page provides a Download button for each file; `floability-remote download`
+provides the same inventory in the terminal. MCP can additionally preview a
+small UTF-8 file or copy selected files into a new local directory. Each file
+is revalidated before transfer, local files are not overwritten, listings are
+limited to 2,000 files, individual files to 100 MiB, and batches to 500 MiB.
 
 Remaining scope:
 
 - **Upload** files from the laptop into a run's workspace, for example input
   data or an edited notebook, before or between runs.
-- Multi-file selection, archives, progress, cancellation, and large transfers.
+- Browser multi-file selection, archives, progress, cancellation, and large transfers.
 - Persistent local history so downloads survive a web-server restart without
   manually supplying the remote run directory.
 - Never overwrite local or remote files without confirmation.

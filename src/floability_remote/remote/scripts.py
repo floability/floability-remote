@@ -642,15 +642,25 @@ def add_tree(group, root, logical_root):
     global truncated
     if not root.is_dir() or root.is_symlink():
         return
+    excluded_directories = {
+        ".git",
+        ".venv",
+        "__pycache__",
+        "vine-run-info",
+        "vine_factory_scratch",
+        ".ipynb_checkpoints",
+    }
     for current, directories, names in os.walk(root, followlinks=False):
         current_path = Path(current)
         directories[:] = sorted(
             name
             for name in directories
-            if name not in {"vine-run-info", ".ipynb_checkpoints"}
+            if name not in excluded_directories
             and not (current_path / name).is_symlink()
         )
         for name in sorted(names):
+            if name == ".DS_Store":
+                continue
             path = current_path / name
             relative = path.relative_to(root).as_posix()
             add(group, f"{logical_root}/{relative}", path)
@@ -667,6 +677,10 @@ for name in ("execute-command.log", "run-command.log"):
             add("command", name, path)
     except OSError:
         pass
+
+backpack_dir = run_dir / "backpack"
+if not truncated:
+    add_tree("backpack", backpack_dir, "backpack")
 
 instance_dir = None
 instance_marker = "[floability] Created instance structure at:"
@@ -689,12 +703,7 @@ if instance_dir is not None and not truncated:
     add_tree("workflow", instance_dir / "workflow", "workflow")
 
 if instance_dir is not None and not truncated:
-    logs = instance_dir / "logs"
-    if logs.is_dir() and not logs.is_symlink():
-        for path in sorted(logs.iterdir(), key=lambda item: item.name):
-            add("logs", f"logs/{path.name}", path)
-            if truncated:
-                break
+    add_tree("logs", instance_dir / "logs", "logs")
 
 if instance_dir is not None and not truncated:
     add("records", "catalog_update.json", instance_dir / "catalog_update.json")
@@ -705,7 +714,10 @@ if instance_dir is not None and not truncated:
 if not truncated:
     add("records", "source.json", run_dir / "source.json")
 
-files.sort(key=lambda item: (item["group"], item["path"]))
+group_order = {name: index for index, name in enumerate(
+    ("command", "backpack", "workflow", "logs", "records")
+)}
+files.sort(key=lambda item: (group_order[item["group"]], item["path"]))
 payload = {
     "python_path": sys.executable,
     "instance_found": instance_dir is not None,

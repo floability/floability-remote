@@ -15,6 +15,19 @@ class FakeClient:
 
 
 class ConnectionPromptRelayTests(unittest.IsolatedAsyncioTestCase):
+    def test_only_the_approved_target_may_relay_prompts(self):
+        relay = ConnectionPromptRelay()
+
+        self.assertEqual(relay._authorized_target, "")
+        relay.before_tool_call(
+            "connect_remote", {"target": "mislam5@cclws23.cse.nd.edu"}
+        )
+        self.assertEqual(
+            relay._authorized_target, "mislam5@cclws23.cse.nd.edu"
+        )
+        relay.before_tool_call("disconnect_remote", {})
+        self.assertEqual(relay._authorized_target, "")
+
     async def test_secret_answer_goes_directly_to_daemon_client(self):
         client = FakeClient()
         relay = ConnectionPromptRelay(

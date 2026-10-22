@@ -9,6 +9,7 @@ import webbrowser
 from typing import Optional
 
 from ..application.errors import OperationError
+from . import API_REVISION
 from .client import DaemonClient
 from .session import DaemonDescriptor, SessionStore, pid_is_daemon, runtime_directory
 
@@ -57,6 +58,28 @@ def attach(
     return DaemonClient(descriptor, client=client)
 
 
+def _retire_incompatible_daemon(
+    descriptor: DaemonDescriptor, store: SessionStore
+) -> bool:
+    """Return True when the daemon is reusable; retire an idle stale one."""
+    metadata = DaemonClient(descriptor, client="daemon-lifecycle").meta()
+    if metadata.get("api_revision") == API_REVISION:
+        return True
+    try:
+        stop(store=store)
+    except OperationError as error:
+        if error.code == "daemon_busy":
+            raise OperationError(
+                "daemon_update_required",
+                "The running Floability Remote daemon is from an older "
+                "installation and still owns an active run. Finish or stop "
+                "that run, then restart the agent.",
+                status=409,
+            ) from error
+        raise
+    return False
+
+
 def start(
     port: Optional[int] = None,
     open_browser: bool = True,
@@ -66,9 +89,12 @@ def start(
     store = store or SessionStore()
     existing = status(store)
     if existing is not None:
-        if open_browser:
-            webbrowser.open(f"http://127.0.0.1:{existing.port}/?token={existing.token}")
-        return existing
+        if _retire_incompatible_daemon(existing, store):
+            if open_browser:
+                webbrowser.open(
+                    f"http://127.0.0.1:{existing.port}/?token={existing.token}"
+                )
+            return existing
 
     directory = runtime_directory()
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)

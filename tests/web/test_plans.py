@@ -156,6 +156,37 @@ class PlanApiTests(unittest.TestCase):
             "source_id", [item["field"] for item in response.json()["issues"]]
         )
 
+    def test_mode_is_derived_from_a_script_entrypoint(self):
+        source = self.inspect()
+        with mock.patch(
+            "floability_remote.application.operations.plans.ClusterService.check",
+            return_value=cluster_report(),
+        ):
+            response = self.client.post(
+                "/api/v1/plans/validate",
+                json={"source_id": source["source_id"], "batch_type": "local"},
+            )
+
+        body = response.json()
+        self.assertTrue(body["valid"], body["issues"])
+        self.assertEqual(body["mode"], "execute")
+
+    def test_incompatible_explicit_mode_is_rejected(self):
+        source = self.inspect()
+        response = self.client.post(
+            "/api/v1/plans/validate",
+            json={
+                "source_id": source["source_id"],
+                "mode": "run",
+                "batch_type": "local",
+            },
+        )
+
+        body = response.json()
+        self.assertFalse(body["valid"])
+        self.assertEqual(body["issues"][0]["field"], "mode")
+        self.assertIn("execute", body["issues"][0]["message"])
+
     def test_unavailable_batch_type_is_rejected(self):
         source = self.inspect()
         report = cluster_report()
